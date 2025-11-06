@@ -9,22 +9,18 @@ from datetime import datetime
 st.set_page_config(layout="wide", page_title="Tom Cruise Jet Tracker (2025)", page_icon="✈️")
 
 # Name der CSV-Datei (muss im selben Ordner wie diese App sein)
-CSV_FILE = 'tom_cruise_n350xx_flights.csv'
+CSV_FILE = 'Tom_Cruise_Jet_2025.csv'
 
 # Konstante für den CO2-Vergleich (monatliche CO2-Emissionen der Vergleichsstadt)
-# Annahme: Monatl. Emissionen Ingolstadt (mittlere dt. Stadt) in Tonnen CO2.
-# Dies ist ein Platzhalterwert und muss recherchiert/angepasst werden!
 CO2_INGOLSTADT_MONTHLY_TONS = 150000
 
-# Funktion zum Laden und Vorbereiten der Daten
+# Funktion zum Laden und Vorbereiten der Daten (Unverändert)
 @st.cache_data
 def load_data(file_path):
     df = pd.read_csv(file_path)
 
     # Datenbereinigung und Typkonvertierung
-    # Konvertiere 'Datum' ins richtige Format
     def parse_date(date_str):
-        # Versuche gängige Formate
         for fmt in ('%m/%d/%Y', '%m/%d/%y', '%d.%m.%Y', '%Y-%m-%d'):
             try:
                 return datetime.strptime(str(date_str), fmt)
@@ -33,22 +29,15 @@ def load_data(file_path):
         return pd.NaT
 
     df['Datum'] = df['Datum'].apply(parse_date)
-    df.dropna(subset=['Datum'], inplace=True) # Entferne Zeilen ohne gültiges Datum
+    df.dropna(subset=['Datum'], inplace=True)
     df.sort_values(by='Datum', inplace=True)
 
-    # Bereinige 'Distanz (Meilen)' und konvertiere zu float
     df['Distanz (Meilen)'] = df['Distanz (Meilen)'].str.replace(' miles', '', regex=False).str.replace(',', '', regex=False).astype(float, errors='ignore')
-
-    # Berechne die Flugnummer (wichtig für den Schieberegler)
     df['Flugnummer'] = np.arange(1, len(df) + 1)
 
     # Füge Platzhalter für geokodierte Koordinaten hinzu (für die Karte erforderlich)
-    # ECHTES PROJEKT: Hier müsste eine API-Abfrage (z.B. Google Maps oder OpenStreetMap)
-    # zur Umwandlung der Airport-Codes (CLD, SUA, VNY etc.) in Längen- und Breitengrade erfolgen.
-    # Da dies komplex ist und externe APIs erfordert, werden hier Beispiel-Daten verwendet,
-    # die auf den echten Koordinaten von LA und Florida basieren, um die Funktionalität zu zeigen.
-    df['lat'] = np.random.uniform(25, 35, len(df)) # Breitengrad
-    df['lon'] = np.random.uniform(-120, -75, len(df)) # Längengrad
+    df['lat'] = np.random.uniform(25, 35, len(df))
+    df['lon'] = np.random.uniform(-120, -75, len(df))
 
     return df
 
@@ -64,12 +53,29 @@ except Exception as e:
     st.stop()
 
 
-# --- 2. Seitentitel und Einleitung ---
-st.title("✈️ Tom Cruise Privatjet-Tracker: Q1 2025 Flüge")
-st.markdown("Analysiert 43 Privatjet-Flüge von Tom Cruise (Bombardier Challenger 350 N350XX) im ersten Quartal 2025.")
+# --- 2. Seitentitel, Bilder und Einleitung (NEU & GEÄNDERT) ---
+st.title("✈️ Privatjet-Tracker für Bonuspunkte")
+
+# Füge die Bilder der Berühmtheit und des Jets hinzu
+col_img1, col_text, col_img2 = st.columns([1, 2, 1])
+
+with col_img1:
+    # Bild der Berühmtheit
+    st.image("image-w856.jpg.webp", caption="Berühmtheit: Tom Cruise")
+
+with col_text:
+    st.header("Analyse der Privatjet-Flüge von Tom Cruise (Q1 2025)")
+    st.markdown("Analysiert 43 Privatjet-Flüge von Tom Cruise im ersten Quartal 2025.")
+    st.markdown("---")
+
+with col_img2:
+    # Bild des Jets und Name
+    st.image("Bild 2.jpeg", caption="Flugzeugtyp: Bombardier Challenger 350 (N350XX)")
+
 st.markdown("---")
 
-# --- 3. Statistische Kennzahlen (KPIs) ---
+
+# --- 3. Statistische Kennzahlen (KPIs) (Unverändert) ---
 st.header("📊 Statistische Kennzahlen")
 
 # Berechne Kennzahlen
@@ -98,7 +104,7 @@ with col5:
 
 st.markdown("---")
 
-# --- 4. Interaktive Karte mit Schieberegler ---
+# --- 4. Interaktive Karte mit Schieberegler (Unverändert) ---
 st.header("📍 Flugbahn auf der Karte")
 st.markdown("Nutzen Sie den **Schieberegler**, um die Flüge sukzessive darzustellen und die Flugbahn zu verfolgen.")
 
@@ -117,7 +123,6 @@ filtered_data = data[data['Flugnummer'] <= flight_slider]
 latest_flight = filtered_data.iloc[-1] if not filtered_data.empty else None
 
 # Karte erstellen
-# Die Karte verwendet die Platzhalter-Koordinaten (lat/lon)
 fig = px.scatter_mapbox(
     filtered_data,
     lat="lat",
@@ -152,7 +157,7 @@ if latest_flight is not None:
 
 st.markdown("---")
 
-# --- 5. Vergleichsanalyse ---
+# --- 5. Vergleichsanalyse (Unverändert) ---
 st.header("⚖️ Vergleich mit einer mittleren deutschen Kleinstadt")
 st.markdown(f"Hier stellen wir die Gesamt-CO₂-Emissionen der **43 Privatjet-Flüge** in Relation zum geschätzten monatlichen CO₂-Ausstoß der **mittleren deutschen Kleinstadt Ingolstadt** (Platzhalterwert: {CO2_INGOLSTADT_MONTHLY_TONS:,.0f} Tonnen).")
 
@@ -193,7 +198,7 @@ st.success(
 
 st.markdown("---")
 
-# --- 6. Datenvorschau ---
+# --- 6. Datenvorschau (Unverändert) ---
 st.header("📋 Rohdaten")
 st.dataframe(data)
 

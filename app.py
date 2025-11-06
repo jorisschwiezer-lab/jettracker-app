@@ -11,7 +11,7 @@ from datetime import datetime
 st.set_page_config(layout="wide", page_title="Tom Cruise Jet Tracker (2024)", page_icon="✈️")
 
 # Name der CSV-Datei (Daten aus 2024)
-CSV_FILE = 'Tom_Cruise_Jet_2024.csv'
+CSV_FILE = 'tom_cruise_n350xx_flights.csv'
 
 # Konstante für den CO2-Vergleich (Jährliche CO2-Emissionen der Vergleichsstadt)
 CO2_INGOLSTADT_ANNUAL_TONS = 1800000

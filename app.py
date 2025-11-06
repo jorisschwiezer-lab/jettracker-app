@@ -2,6 +2,8 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.express as px
+import plotly.graph_objects as go # NEU: Für die Kartenlinien benötigt
+import re # KORRIGIERT: Fehlender Import für reguläre Ausdrücke
 from datetime import datetime
 
 # --- 1. Konfiguration und Daten laden ---
@@ -9,10 +11,9 @@ from datetime import datetime
 st.set_page_config(layout="wide", page_title="Tom Cruise Jet Tracker (2024)", page_icon="✈️")
 
 # Name der CSV-Datei (Daten aus 2024)
-CSV_FILE = 'tom_cruise_n350xx_flights.csv'
+CSV_FILE = 'Tom_Cruise_Jet_2024.csv'
 
 # Konstante für den CO2-Vergleich (Jährliche CO2-Emissionen der Vergleichsstadt)
-# Platzhalter: Jährlicher Ausstoß Ingolstadt in Tonnen CO₂
 CO2_INGOLSTADT_ANNUAL_TONS = 1800000
 
 # Dictionary mit den geokodierten Koordinaten der Flughäfen
@@ -53,7 +54,8 @@ AIRPORT_COORDINATES = {
 
 # Funktion zum Extrahieren des Airport-Codes aus dem Ort-String
 def extract_airport_code(location_str):
-    match = re.search(r'\(([^)]+)\)', location_str)
+    # Sucht nach Text in Klammern und nimmt den letzten Teil als Code
+    match = re.search(r'\(([^)]+)\)', str(location_str))
     return match.group(1).split()[-1] if match else None
 
 # Funktion zum Laden und Vorbereiten der Daten
@@ -81,10 +83,6 @@ def load_data(file_path):
     df['Ziel_lon'] = df['Ziel_Code'].apply(lambda x: AIRPORT_COORDINATES.get(x, (None, None))[1])
     
     # Für die Karte benötigen wir alle Punkte (Abflug und Ziel) in einer langen Liste
-    # (Dies ist notwendig, um die Fluglinien zu zeichnen. Wir verwenden hier nur Abflugorte als Punkte für die Karte,
-    # aber um die Fluglinie zu zeichnen, brauchen wir Zielpunkte in der gleichen Tabelle)
-    
-    # Wir fügen die Zielpunkte als separate Zeilen hinzu (wichtig für die korrekte Kartendarstellung von Linien)
     flight_lines = []
     for index, row in df.iterrows():
         # Abflugort (Startpunkt der Linie)
@@ -115,9 +113,8 @@ def load_data(file_path):
 try:
     data, map_data = load_data(CSV_FILE)
     total_flights = len(data)
-    # Entferne Duplikate/unvollständige Einträge, die durch Geokodierung entstehen könnten
     if map_data.empty:
-         st.error("FEHLER: Konnte keine gültigen Koordinaten finden. Karte kann nicht dargestellt werden.")
+         st.error("FEHLER: Konnte keine gültigen Koordinaten finden. Karte kann nicht dargestellt werden. Überprüfen Sie, ob die Flughafen-Codes in der AIRPORT_COORDINATES-Liste vorhanden sind.")
          st.stop()
     st.success(f"Daten erfolgreich geladen. {total_flights} Flüge aus 2024.")
 except FileNotFoundError:
@@ -128,7 +125,7 @@ except Exception as e:
     st.stop()
 
 
-# --- 2. Seitentitel, Bilder und Einleitung (Unverändert) ---
+# --- 2. Seitentitel, Bilder und Einleitung ---
 st.title("✈️ Privatjet-Tracker für Bonuspunkte")
 
 col_img1, col_text, col_img2 = st.columns([1, 2, 1])
@@ -156,30 +153,43 @@ total_fuel = data['Treibstoffverbrauch (Gallons)'].sum()
 total_emissions = data['Emissionen (Metrische Tonnen)'].sum()
 avg_emissions_per_flight = data['Emissionen (Metrische Tonnen)'].mean()
 
+# Hilfsfunktion für die Formatierung (Punkt als Tausendertrenner, Komma als Dezimaltrennzeichen)
+def format_number_de(number, decimals=0):
+    if pd.isna(number):
+        return ""
+    # Verwende String-Formatierung für Tausendertrenner und ersetze dann Komma durch Punkt
+    formatted = f"{number:,.{decimals}f}"
+    
+    # 1. Ersetze Komma (Dezimaltrennzeichen in US-Formatierung) durch temporäres Zeichen (z.B. Pipe)
+    formatted = formatted.replace(",", "|")
+    # 2. Ersetze Punkt (Tausendertrennzeichen in US-Formatierung) durch Komma
+    formatted = formatted.replace(".", ",")
+    # 3. Ersetze temporäres Zeichen durch Punkt (Dezimaltrennzeichen in DE-Formatierung)
+    formatted = formatted.replace("|", ".")
+    return formatted
+
 col1, col2, col3, col4, col5 = st.columns(5)
 
-# Fügen Sie .format(Gruppierungszeichen) hinzu: ,.0f -> ,.0f
 with col1:
     st.metric(label="Gesamtflüge (2024)", value=f"{total_flights}")
 
 with col2:
-    st.metric(label="Gesamtdistanz (Meilen)", value=f"{total_distance:,.0f}".replace(",", ".").replace(".", ",", -1).replace(",", ".", 1))
+    st.metric(label="Gesamtdistanz (Meilen)", value=format_number_de(total_distance))
 
 with col3:
-    st.metric(label="Gesamter Treibstoff (Gallons)", value=f"{total_fuel:,.0f}".replace(",", ".").replace(".", ",", -1).replace(",", ".", 1))
+    st.metric(label="Gesamter Treibstoff (Gallons)", value=format_number_de(total_fuel))
 
 with col4:
-    st.metric(label="Gesamtemissionen (Metr. Tonnen CO₂)", value=f"{total_emissions:,.0f}".replace(",", ".").replace(".", ",", -1).replace(",", ".", 1))
+    st.metric(label="Gesamtemissionen (Metr. Tonnen CO₂)", value=format_number_de(total_emissions))
 
 with col5:
-    st.metric(label="Ø Emission pro Flug (Tonnen CO₂)", value=f"{avg_emissions_per_flight:,.1f}".replace(",", ".").replace(".", ",", -1).replace(",", ".", 1))
+    st.metric(label="Ø Emission pro Flug (Tonnen CO₂)", value=format_number_de(avg_emissions_per_flight, decimals=1))
 
 st.markdown("---")
 
 # --- 4. Interaktive Karte mit Schieberegler (Karte an Koordinaten angepasst) ---
 st.header("📍 Flugbahn auf der Karte")
 st.markdown("Nutzen Sie den **Schieberegler**, um die Flüge sukzessive darzustellen und die Flugbahn zu verfolgen.")
-
 
 # Schieberegler für die Flugnummer (sukzessive Darstellung)
 max_flight = data['Flugnummer'].max()
@@ -196,28 +206,24 @@ filtered_map_data = map_data[map_data['Flugnummer'] <= flight_slider]
 filtered_data = data[data['Flugnummer'] <= flight_slider]
 latest_flight = filtered_data.iloc[-1] if not filtered_data.empty else None
 
-# Karte erstellen (Fluglinien)
-# Verwenden Sie Plotly Go für Linien und Scatterpunkte
-import plotly.graph_objects as go
-
 fig = go.Figure()
 
 # Fügen Sie die Fluglinien hinzu (gruppiert nach Flugnummer)
 for flight_num in filtered_map_data['Flugnummer'].unique():
     segment = filtered_map_data[filtered_map_data['Flugnummer'] == flight_num]
-    if len(segment) == 2:
+    if len(segment) >= 2: # Muss mindestens Start- und Zielpunkt haben
         # Fügt die Fluglinie hinzu
         fig.add_trace(go.Scattermapbox(
             mode="lines",
-            lon=[segment.iloc[0]['lon'], segment.iloc[1]['lon']],
-            lat=[segment.iloc[0]['lat'], segment.iloc[1]['lat']],
+            lon=segment['lon'],
+            lat=segment['lat'],
             name=f"Flug {flight_num}",
             line=dict(width=2, color='red'),
             hoverinfo='text',
-            text=f"Flug {flight_num}: {segment.iloc[0]['Ort']} -> {segment.iloc[1]['Ort']}",
+            text=f"Flug {flight_num}: {segment.iloc[0]['Ort']} -> {segment.iloc[-1]['Ort']}",
         ))
 
-# Füge die Flughafen-Punkte hinzu (nur Start- und Zielorte)
+# Füge die Flughafen-Punkte hinzu (alle Punkte, die im gefilterten Segment liegen)
 fig.add_trace(go.Scattermapbox(
     mode="markers",
     lon=filtered_map_data['lon'],
@@ -240,7 +246,7 @@ fig.update_layout(
             lon=map_data['lon'].mean()
         ),
         pitch=0,
-        zoom=2.5 # Angepasster Zoom für USA/Karibik
+        zoom=2.5
     )
 )
 
@@ -251,7 +257,7 @@ if latest_flight is not None and pd.notna(latest_flight['Datum']):
         **Aktueller Flug (Nr. {latest_flight['Flugnummer']}):**
         * **Datum:** {latest_flight['Datum'].strftime('%d.%m.%Y')}
         * **Route:** {latest_flight['Abflugort']} → {latest_flight['Zielort']}
-        * **Emissionen:** {latest_flight['Emissionen (Metrische Tonnen)']:.1f} metrische Tonnen CO₂
+        * **Emissionen:** {format_number_de(latest_flight['Emissionen (Metrische Tonnen)'], decimals=1)} metrische Tonnen CO₂
     """)
 
 st.markdown("---")
@@ -274,7 +280,7 @@ comparison_data = pd.DataFrame({
 
 # Verhältnis berechnen
 ratio = (total_emissions / CO2_INGOLSTADT_ANNUAL_TONS) * 100
-ratio_formatted = f"{ratio:.4f}".replace(".", ",")
+ratio_formatted = format_number_de(ratio, decimals=4)
 
 st.subheader("Balkendiagramm: CO₂-Emissionen im Jahresvergleich")
 fig_bar = px.bar(
@@ -298,7 +304,7 @@ st.success(
 
 st.markdown("---")
 
-# --- 6. Datenvorschau (Unverändert) ---
+# --- 6. Datenvorschau ---
 st.header("📋 Rohdaten")
 st.dataframe(data)
 

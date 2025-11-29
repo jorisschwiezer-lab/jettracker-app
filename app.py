@@ -9,6 +9,9 @@ from datetime import datetime
 # --- 1. Konfiguration und Daten laden ---
 st.set_page_config(layout="wide", page_title="Tom Cruise Jet Tracker (2024)", page_icon="✈️")
 
+# VOM BENUTZER BEREITGESTELLTER MAPBOX-TOKEN:
+# MAPBOX_TOKEN = "pk.eyJ1Ijoiam9yaXNzY2h3IiwiYSI6ImNtaWs3Zms3ajBtM2EzZ3M0MHViZ2k1c28ifQ.gbuhPm3JU40TRRzXKWThbw"
+
 CSV_FILE = 'tom_cruise_n350xx_flights.csv'
 CO2_INGOLSTADT_ANNUAL_TONS = 1800000
 
@@ -76,8 +79,14 @@ try:
     total_flights = len(data)
     st.success(f"Daten erfolgreich geladen. {total_flights} Flüge aus 2024.")
 except Exception as e:
-    st.error(f"FEHLER: {e}")
+    st.error(f"FEHLER: Die Datei '{CSV_FILE}' konnte nicht geladen werden oder ist ungültig. Stellen Sie sicher, dass sie existiert und korrekt formatiert ist. Details: {e}")
     st.stop()
+
+# Funktion zur sauberen Formatierung von Zahlen
+def format_number_de(number, decimals=0):
+    formatted = f"{number:,.{decimals}f}"
+    formatted = formatted.replace(",", "|").replace(".", ",").replace("|", ".")
+    return formatted
 
 # --- 2. Seitentitel, Bilder und Einleitung ---
 st.title("✈️ Privatjet-Tracker für Bonuspunkte")
@@ -85,7 +94,12 @@ st.title("✈️ Privatjet-Tracker für Bonuspunkte")
 col_img1, col_text, col_img2 = st.columns([1, 2, 1])
 
 with col_img1:
-    st.image("image-w856.jpg.webp", caption="Berühmtheit: Tom Cruise")
+    # Stellen Sie sicher, dass Sie diese Bilder lokal haben oder durch Platzhalter ersetzen
+    # Wenn die Bilder fehlen, kann es zu einem Fehler kommen.
+    try:
+        st.image("image-w856.jpg.webp", caption="Berühmtheit: Tom Cruise")
+    except:
+        st.markdown("<!-- Bild 1 Placeholder -->")
 
 with col_text:
     st.header(f"Analyse der Privatjet-Flüge von Tom Cruise (2024)")
@@ -93,7 +107,10 @@ with col_text:
     st.markdown("---")
 
 with col_img2:
-    st.image("Bild 2.jpeg", caption="Bombardier Challenger 350 (N350XX)")
+    try:
+        st.image("Bild 2.jpeg", caption="Bombardier Challenger 350 (N350XX)")
+    except:
+        st.markdown("<!-- Bild 2 Placeholder -->")
 
 st.markdown("---")
 
@@ -105,11 +122,6 @@ total_fuel = data['Treibstoffverbrauch (Gallons)'].sum()
 total_emissions = data['Emissionen (Metrische Tonnen)'].sum()
 avg_emissions_per_flight = data['Emissionen (Metrische Tonnen)'].mean()
 
-def format_number_de(number, decimals=0):
-    formatted = f"{number:,.{decimals}f}"
-    formatted = formatted.replace(",", "|").replace(".", ",").replace("|", ".")
-    return formatted
-
 col1, col2, col3, col4, col5 = st.columns(5)
 col1.metric("Gesamtflüge", f"{total_flights}")
 col2.metric("Gesamtdistanz (Meilen)", format_number_de(total_distance))
@@ -120,50 +132,105 @@ col5.metric("Ø Emission pro Flug", format_number_de(avg_emissions_per_flight, 1
 st.markdown("---")
 
 # =====================================================================
-# ======================== 3D GLOBE – NEU ==============================
+# ======================== 3D GLOBE – FINALE VERSION ===================
 # =====================================================================
 
 st.header("🌍 3D-Weltkarte der Flugbahnen")
 
+# Vorbereitung der Routendaten (Gruppierung und Frequenzberechnung)
 valid = data.dropna(subset=["lat", "lon", "Ziel_lat", "Ziel_lon"]).copy()
 valid["Route"] = valid["Abflug_Code"] + " → " + valid["Ziel_Code"]
-route_counts = valid["Route"].value_counts()
-valid["freq"] = valid["Route"].map(route_counts)
+route_groups = valid.groupby("Route").agg(
+    count=('Route', 'size'),
+    lat_start=('lat', 'first'),
+    lon_start=('lon', 'first'),
+    lat_end=('Ziel_lat', 'first'),
+    lon_end=('Ziel_lon', 'first'),
+    Abflugort=('Abflugort', 'first'),
+    Zielort=('Zielort', 'first')
+).reset_index()
 
-max_freq = valid["freq"].max()
-
+max_freq = route_groups["count"].max()
 fig = go.Figure()
 
-for _, r in valid.iterrows():
-    red = int(255 * (r["freq"] / max_freq))
-    green = int(255 * (1 - r["freq"] / max_freq))
-    blue = 0
-
+# 1. Fluglinien (Bogenartig & Frequenzabhängig)
+for _, r in route_groups.iterrows():
+    # Berechnung der Liniendicke basierend auf der Frequenz (skaliert von 1 bis 8)
+    line_thickness = 1 + 7 * (r["count"] / max_freq)
+    
+    # Farbe von Grün (selten) nach Rot (häufig)
+    normalized_freq = r["count"] / max_freq
+    red = int(255 * normalized_freq)
+    green = int(255 * (1 - normalized_freq))
+    color_rgb = f"rgb({red},{green},50)"
+    
     fig.add_trace(go.Scattergeo(
-        lon=[r["lon"], r["Ziel_lon"]],
-        lat=[r["lat"], r["Ziel_lat"]],
+        lon=[r["lon_start"], r["lon_end"]],
+        lat=[r["lat_start"], r["lat_end"]],
         mode="lines",
-        line=dict(width=2, color=f"rgb({red},{green},{blue})"),
+        line=dict(width=line_thickness, color=color_rgb),
         hoverinfo="text",
-        text=f"{r['Route']}<br>Geflogen: {r['freq']}×"
+        text=f"Route: {r['Route']}<br>Flüge: {r['count']}x",
+        showlegend=False
     ))
 
+# 2. Flughäfen (Stecknadeln/Punkte)
+# Sammeln aller einzigartigen Flughafen-Koordinaten und -Codes
+airport_coords = {}
+for code, (lat, lon) in AIRPORT_COORDINATES.items():
+    if lat is not None and lon is not None:
+        # Finde den zugehörigen Ort (optional, verbessert den Hover-Text)
+        # Hier ist keine einfache Zuordnung möglich, wir verwenden nur den Code
+        airport_coords[code] = {'lat': lat, 'lon': lon, 'code': code}
+
+airport_codes = list(airport_coords.keys())
+airport_lats = [d['lat'] for d in airport_coords.values()]
+airport_lons = [d['lon'] for d in airport_coords.values()]
+airport_hover_text = ['Flughafen-Code: ' + code for code in airport_codes]
+
+
+fig.add_trace(go.Scattergeo(
+    lon=airport_lons,
+    lat=airport_lats,
+    mode='markers',
+    marker=dict(
+        size=10,
+        color='white',
+        symbol='circle',
+        line=dict(width=2, color='darkblue') # Stecknadel-Effekt
+    ),
+    hoverinfo='text',
+    text=airport_hover_text,
+    name='Flughäfen'
+))
+
+
+# 3. Globe-Konfiguration
 fig.update_geos(
-    projection_type="orthographic",
+    projection_type="orthographic", # Zeigt die Erde als 3D-Globus (bogenartige Fluglinien)
     showland=True,
     showcountries=True,
-    landcolor="lightgray",
-    countrycolor="gray",
+    landcolor="#EAEAEA",
+    countrycolor="#BDBDBD",
+    bgcolor="#F0F2F6", 
+    showocean=True,
+    oceancolor="#AECBEA" 
 )
 
 fig.update_layout(
     height=800,
-    title="3D-Globus – Routenhäufigkeit (Grün → Rot)"
+    title="3D-Globus der Flugrouten (Liniendicke = Frequenz)",
+    margin={"r":0, "t":50, "l":0, "b":0},
+    # Setze die Startansicht auf die USA, wo die meisten Flüge stattfinden
+    geo=dict(
+        projection_rotation=dict(lon=-90, lat=40, roll=0), 
+        center=dict(lon=-90, lat=40)
+    )
 )
 
 st.plotly_chart(fig, use_container_width=True)
 
-st.info("🟩 Grün = einmal • 🟨 mittel • 🟥 oft")
+st.info("✈️ Linienbreite und Farbe zeigen die Häufigkeit der Route an (Grün/Dünn → Rot/Dick). Halten Sie die Maus über einen blauen Punkt, um den Flughafen-Code zu sehen.")
 
 st.markdown("---")
 

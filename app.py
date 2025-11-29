@@ -7,13 +7,12 @@ import re
 from datetime import datetime
 
 # --- 1. Konfiguration und Daten laden ---
-# Stellt den Light-Modus über die Plotly-Konfiguration sicher.
 st.set_page_config(layout="wide", page_title="Tom Cruise Jet Tracker (2024)", page_icon="✈️")
 
 CSV_FILE = 'tom_cruise_n350xx_flights.csv'
 CO2_INGOLSTADT_ANNUAL_TONS = 1800000
 
-# Zusätzliche Daten: Flughafennamen für bessere Benutzererfahrung
+# Zusätzliche Daten: Flughafennamen und Koordinaten
 AIRPORT_NAMES = {
     'FXE': 'Fort Lauderdale Executive Airport', 'VNY': 'Van Nuys Airport', 'SUA': 'Witham Field (Stuart)',
     'CAK': 'Akron-Canton Airport', 'MRY': 'Monterey Regional Airport', 'APF': 'Naples Municipal Airport',
@@ -49,7 +48,6 @@ AIRPORT_NAMES = {
     'PPM': 'Pompano Beach Airpark', 'SLT': 'Salida Airport', 'CRE': 'Grand Strand Airport',
 }
 
-# HINWEIS: Die Koordinaten müssen separat geführt werden, da AIRPORT_NAMES nur die Namen liefert.
 AIRPORT_COORDINATES = {
     'FXE': (26.197, -80.174), 'VNY': (34.209, -118.490), 'SUA': (27.247, -80.244),
     'CAK': (40.923, -81.442), 'MRY': (36.586, -121.870), 'APF': (26.146, -81.773),
@@ -98,6 +96,7 @@ def load_data(file_path):
     df.sort_values(by='Datum', inplace=True)
 
     df['Flugnummer'] = np.arange(1, len(df) + 1)
+    df['Datum_str'] = df['Datum'].dt.strftime('%d.%m.%Y')
 
     df['Abflug_Code'] = df['Abflugort'].apply(extract_airport_code)
     df['Ziel_Code'] = df['Zielort'].apply(extract_airport_code)
@@ -107,7 +106,6 @@ def load_data(file_path):
     df['Ziel_lat'] = df['Ziel_Code'].apply(lambda x: AIRPORT_COORDINATES.get(x, (None, None))[0])
     df['Ziel_lon'] = df['Ziel_Code'].apply(lambda x: AIRPORT_COORDINATES.get(x, (None, None))[1])
     
-    # Füge volle Namen hinzu
     df['Abflug_Name'] = df['Abflug_Code'].apply(lambda x: AIRPORT_NAMES.get(x, x))
     df['Ziel_Name'] = df['Ziel_Code'].apply(lambda x: AIRPORT_NAMES.get(x, x))
 
@@ -118,48 +116,36 @@ try:
     total_flights = len(data)
     st.success(f"Daten erfolgreich geladen. {total_flights} Flüge aus 2024.")
 except Exception as e:
-    st.error(f"FEHLER: Die Datei '{CSV_FILE}' konnte nicht geladen werden oder ist ungültig. Stellen Sie sicher, dass sie existiert und korrekt formatiert ist. Details: {e}")
+    st.error(f"FEHLER: Die Datei '{CSV_FILE}' konnte nicht geladen werden oder ist ungültig. Details: {e}")
     st.stop()
 
-# Funktion zur sauberen Formatierung von Zahlen
 def format_number_de(number, decimals=0):
     formatted = f"{number:,.{decimals}f}"
     formatted = formatted.replace(",", "|").replace(".", ",").replace("|", ".")
     return formatted
 
-# --- 2. Seitentitel, Bilder und Einleitung ---
+# --- 2. Kopfzeile und Statistische Kennzahlen (Statisch) ---
 st.title("✈️ Privatjet-Tracker für Bonuspunkte")
 
 col_img1, col_text, col_img2 = st.columns([1, 2, 1])
-
-with col_img1:
-    # Stellen Sie sicher, dass Sie diese Bilder lokal haben oder durch Platzhalter ersetzen
-    try:
-        st.image("image-w856.jpg.webp", caption="Berühmtheit: Tom Cruise")
-    except:
-        st.markdown("<!-- Bild 1 Placeholder -->")
-
 with col_text:
     st.header(f"Analyse der Privatjet-Flüge von Tom Cruise (2024)")
     st.markdown(f"Analysiert **{total_flights}** Privatjet-Flüge im Jahr 2024.")
     st.markdown("---")
 
+# Platzhalter für Bilder
+with col_img1:
+    st.markdown("<!-- Bild 1 Placeholder -->")
 with col_img2:
-    try:
-        st.image("Bild 2.jpeg", caption="Bombardier Challenger 350 (N350XX)")
-    except:
-        st.markdown("<!-- Bild 2 Placeholder -->")
+    st.markdown("<!-- Bild 2 Placeholder -->")
 
-st.markdown("---")
-
-# --- 3. Statistische Kennzahlen ---
-st.header("📊 Statistische Kennzahlen")
-
+# Statistische Kennzahlen
 total_distance = data['Distanz (Meilen)'].sum()
 total_fuel = data['Treibstoffverbrauch (Gallons)'].sum()
 total_emissions = data['Emissionen (Metrische Tonnen)'].sum()
 avg_emissions_per_flight = data['Emissionen (Metrische Tonnen)'].mean()
 
+st.header("📊 Statistische Kennzahlen")
 col1, col2, col3, col4, col5 = st.columns(5)
 col1.metric("Gesamtflüge", f"{total_flights}")
 col2.metric("Gesamtdistanz (Meilen)", format_number_de(total_distance))
@@ -170,135 +156,143 @@ col5.metric("Ø Emission pro Flug", format_number_de(avg_emissions_per_flight, 1
 st.markdown("---")
 
 # =====================================================================
-# ======================== 3D GLOBE – FINALE VERSION ===================
+# ======================== 3. Interaktive Flugverfolgung ================
 # =====================================================================
 
-st.header("🌍 3D-Weltkarte der Flugbahnen")
+st.header("🗓️ Interaktive Flugverfolgung (2024)")
 
-# Vorbereitung der Routendaten (Gruppierung und Frequenzberechnung)
-valid = data.dropna(subset=["lat", "lon", "Ziel_lat", "Ziel_lon"]).copy()
-valid["Route"] = valid["Abflug_Code"] + " → " + valid["Ziel_Code"]
-route_groups = valid.groupby("Route").agg(
-    count=('Route', 'size'),
-    lat_start=('lat', 'first'),
-    lon_start=('lon', 'first'),
-    lat_end=('Ziel_lat', 'first'),
-    lon_end=('Ziel_lon', 'first'),
-    Abflugort=('Abflugort', 'first'),
-    Zielort=('Zielort', 'first'),
-    Abflug_Code=('Abflug_Code', 'first'),
-    Ziel_Code=('Ziel_Code', 'first')
-).reset_index()
+# --- 3a. Kalender/Datumsauswahl ---
+unique_dates = data['Datum_str'].unique()
+selected_date_str = st.selectbox(
+    "1. Flugdatum wählen (Kalender-Simulation):",
+    options=unique_dates,
+    index=0,
+    help="Wählen Sie ein Datum, an dem Flüge stattfanden."
+)
 
-max_freq = route_groups["count"].max()
-fig = go.Figure()
+filtered_flights = data[data['Datum_str'] == selected_date_str].reset_index(drop=True)
 
-# --- 1. Fluglinien (Bogenartig & Frequenzabhängig) ---
-# Die Linien werden automatisch bogenförmig in der 'orthographic' Projektion dargestellt.
-for _, r in route_groups.iterrows():
-    # Berechnung der Liniendicke basierend auf der Frequenz (skaliert von 1 bis 8)
-    line_thickness = 1 + 7 * (r["count"] / max_freq)
+# --- 3b. Flugauswahl ---
+if not filtered_flights.empty:
+    flight_options = [
+        f"{row['Abflug_Name']} ({row['Abflug_Code']}) → {row['Ziel_Name']} ({row['Ziel_Code']})"
+        for index, row in filtered_flights.iterrows()
+    ]
     
-    # Farbe von Blau-Grün (selten) nach Rot (häufig)
-    normalized_freq = r["count"] / max_freq
-    red = int(255 * normalized_freq)
-    green = int(255 * (1 - normalized_freq) * 0.7) # etwas dunkleres Grün
-    color_rgb = f"rgb({red},{green},100)"
+    selected_flight_option = st.selectbox(
+        f"2. Flug auf dem Datum ({selected_date_str}) wählen:",
+        options=flight_options,
+        index=0
+    )
     
+    # Ausgewählter Flug extrahieren
+    selected_index = flight_options.index(selected_flight_option)
+    flight_data = filtered_flights.iloc[selected_index]
+    
+    # --- 3c. Fortschrittsregler ---
+    st.subheader(f"Flug: {flight_data['Abflug_Code']} → {flight_data['Ziel_Code']} am {selected_date_str}")
+    progress = st.slider(
+        "3. Fortschritt des Fluges (Flugzeug steuern):",
+        min_value=0,
+        max_value=100,
+        value=0,
+        step=1,
+        format="%d %%"
+    ) / 100.0
+    
+    # --- Berechnung der aktuellen Flugzeugposition (Interpolation) ---
+    lat_start, lon_start = flight_data['lat'], flight_data['lon']
+    lat_end, lon_end = flight_data['Ziel_lat'], flight_data['Ziel_lon']
+    
+    # Lineare Interpolation für die Position des Flugzeugs
+    current_lat = lat_start + progress * (lat_end - lat_start)
+    current_lon = lon_start + progress * (lon_end - lon_start)
+
+    # --- 3d. Map Visualisierung ---
+    fig = go.Figure()
+
+    # 1. Die gesamte Flugbahn (Bogen)
     fig.add_trace(go.Scattergeo(
-        lon=[r["lon_start"], r["lon_end"]],
-        lat=[r["lat_start"], r["lat_end"]],
+        lon=[lon_start, lon_end],
+        lat=[lat_start, lat_end],
         mode="lines",
-        line=dict(width=line_thickness, color=color_rgb),
+        line=dict(width=4, color='#FF4B4B'), # Rot für die aktive Bahn
         hoverinfo="text",
-        text=f"Route: {r['Abflugort']} → {r['Zielort']}<br>Flüge: {r['count']}x",
-        showlegend=False
+        text=selected_flight_option,
+        name='Flugbahn'
     ))
 
-# --- 2. Flughäfen (Stecknadeln/Punkte) ---
-airport_coords = {}
-airport_names_list = []
-airport_codes_list = []
+    # 2. Startpunkt
+    fig.add_trace(go.Scattergeo(
+        lon=[lon_start], lat=[lat_start],
+        mode='markers',
+        marker=dict(size=10, color='darkgreen', symbol='circle'),
+        hoverinfo='text',
+        text=[f"Start: {flight_data['Abflug_Name']} ({flight_data['Abflug_Code']})"],
+        name='Start'
+    ))
 
-# Sammeln aller eindeutigen Flughafen-Koordinaten und -Namen
-unique_codes = set(route_groups['Abflug_Code']).union(set(route_groups['Ziel_Code']))
+    # 3. Zielpunkt (mit Richtung)
+    fig.add_trace(go.Scattergeo(
+        lon=[lon_end], lat=[lat_end],
+        mode='markers',
+        marker=dict(size=10, color='#0056B3', symbol='star'),
+        hoverinfo='text',
+        text=[f"Ziel: {flight_data['Ziel_Name']} ({flight_data['Ziel_Code']})"],
+        name='Ziel'
+    ))
 
-for code in unique_codes:
-    lat, lon = AIRPORT_COORDINATES.get(code, (None, None))
-    if lat is not None and lon is not None:
-        airport_coords[code] = {'lat': lat, 'lon': lon}
-        airport_names_list.append(AIRPORT_NAMES.get(code, f'Unbekannter Flughafen ({code})'))
-        airport_codes_list.append(code)
+    # 4. Flugzeugsymbol (Aktuelle Position)
+    fig.add_trace(go.Scattergeo(
+        lon=[current_lon], lat=[current_lat],
+        mode='markers',
+        marker=dict(
+            size=15, 
+            color='#333333', 
+            symbol='triangle-up', 
+            line=dict(width=1, color='white')
+        ),
+        hoverinfo='text',
+        text=[f"Flugzeug: {int(progress*100)}%"],
+        name='Aktuelle Position'
+    ))
 
-airport_lats = [d['lat'] for d in airport_coords.values()]
-airport_lons = [d['lon'] for d in airport_coords.values()]
-
-# Plot Marker für Start- und Zielorte (Stecknadel-Effekt)
-fig.add_trace(go.Scattergeo(
-    lon=airport_lons,
-    lat=airport_lats,
-    mode='markers',
-    marker=dict(
-        size=8,
-        color='#FFFFFF', # Weiße Füllung
-        symbol='circle',
-        line=dict(width=1.5, color='#0056B3') # Dunkelblaue Umrandung
-    ),
-    hoverinfo='text',
-    text=[f"Flughafen: {name} ({code})" for name, code in zip(airport_names_list, airport_codes_list)],
-    name='Flughäfen'
-))
-
-# --- 3. Flugrichtung (Pfeilmarkierungen an den Zielen) ---
-# Markiert das Ende jeder einzigartigen Route mit einem kleinen Dreieck
-fig.add_trace(go.Scattergeo(
-    lon=route_groups['lon_end'],
-    lat=route_groups['lat_end'],
-    mode='markers',
-    marker=dict(
-        size=6,
-        color='#FF4B4B', # Roter Punkt als Ziel
-        symbol='triangle-up', # Das Symbol wird auf der Kugel zum Himmel/Globus ausgerichtet
-        line=dict(width=1, color='#333333') 
-    ),
-    hoverinfo='text',
-    text=[f"ZIEL: {AIRPORT_NAMES.get(code, code)}" for code in route_groups['Ziel_Code']],
-    name='Flugrichtung',
-    showlegend=False
-))
-
-
-# --- 4. Globe-Konfiguration (Light Mode) ---
-fig.update_geos(
-    projection_type="orthographic", # 3D-Globus für bogenförmige Linien
-    showland=True,
-    showcountries=True,
-    landcolor="#F5F5F5", # Hellgrau
-    countrycolor="#CCCCCC", # Mittleres Grau
-    bgcolor="#FFFFFF", # Hintergrund Weiß
-    showocean=True,
-    oceancolor="#E6F0FF" # Sehr helles Blau
-)
-
-fig.update_layout(
-    height=800,
-    title="3D-Globus der Flugrouten (Liniendicke = Frequenz)",
-    margin={"r":0, "t":50, "l":0, "b":0},
-    title_font_color="#333333", # Dunkle Schrift für Light Mode
-    # Setze die Startansicht auf die USA, wo die meisten Flüge stattfinden
-    geo=dict(
-        projection_rotation=dict(lon=-90, lat=40, roll=0), 
-        center=dict(lon=-90, lat=40)
+    # Globe-Konfiguration (Light Mode)
+    fig.update_geos(
+        projection_type="orthographic", # 3D-Globus für bogenförmige Linien
+        showland=True,
+        showcountries=True,
+        landcolor="#F5F5F5",
+        countrycolor="#CCCCCC",
+        bgcolor="#FFFFFF",
+        showocean=True,
+        oceancolor="#E6F0FF"
     )
-)
 
-st.plotly_chart(fig, use_container_width=True)
+    # Automatische Zentrierung der Karte um den Flug
+    center_lat = (lat_start + lat_end) / 2
+    center_lon = (lon_start + lon_end) / 2
+    
+    fig.update_layout(
+        height=700,
+        title=f"Verfolgung des Fluges {flight_data['Abflug_Code']} → {flight_data['Ziel_Code']}",
+        title_font_color="#333333",
+        geo=dict(
+            projection_rotation=dict(lon=-center_lon, lat=-center_lat, roll=0), 
+            center=dict(lon=center_lon, lat=center_lat),
+            scope='world'
+        )
+    )
 
-st.info("✈️ Linienbreite und Farbe zeigen die Häufigkeit der Route an (Blau-Grün/Dünn → Rot/Dick). Die roten Markierungen kennzeichnen das Ziel und damit die Flugrichtung.")
+    st.plotly_chart(fig, use_container_width=True)
+    
+else:
+    st.warning("Für dieses Datum sind keine gültigen Flüge verfügbar.")
+
 
 st.markdown("---")
 
-# --- 5. Vergleichsanalyse ---
+# --- 4. Vergleichsanalyse ---
 st.header("⚖️ Vergleich mit einer Kleinstadt")
 
 comparison_data = pd.DataFrame({
@@ -312,10 +306,10 @@ ratio_formatted = format_number_de(ratio, 4)
 fig_bar = px.bar(comparison_data, x='Quelle', y='CO2',
                  color='Quelle',
                  color_discrete_map={
-                     'Cruise-Flüge': '#FF4B4B', # Rot
-                     'Ingolstadt (jährlich)': '#0083B8' # Blau
+                     'Cruise-Flüge': '#FF4B4B',
+                     'Ingolstadt (jährlich)': '#0083B8'
                  },
-                 template='plotly_white') # Setze Light Mode Template für den Bar-Chart
+                 template='plotly_white')
 
 st.plotly_chart(fig_bar, use_container_width=True)
 
@@ -323,6 +317,6 @@ st.success(f"Die Privatjet-Flüge entsprechen **{ratio_formatted}%** der jährli
 
 st.markdown("---")
 
-# --- 6. Rohdaten ---
+# --- 5. Rohdaten ---
 st.header("📋 Rohdaten")
 st.dataframe(data)

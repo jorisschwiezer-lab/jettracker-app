@@ -2,21 +2,16 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.express as px
-import plotly.graph_objects as go # NEU: Für die Kartenlinien benötigt
-import re # KORRIGIERT: Fehlender Import für reguläre Ausdrücke
+import plotly.graph_objects as go
+import re
 from datetime import datetime
 
 # --- 1. Konfiguration und Daten laden ---
-# Das Layout der Seite auf "wide" setzen
 st.set_page_config(layout="wide", page_title="Tom Cruise Jet Tracker (2024)", page_icon="✈️")
 
-# Name der CSV-Datei (Daten aus 2024)
 CSV_FILE = 'tom_cruise_n350xx_flights.csv'
-
-# Konstante für den CO2-Vergleich (Jährliche CO2-Emissionen der Vergleichsstadt)
 CO2_INGOLSTADT_ANNUAL_TONS = 1800000
 
-# Dictionary mit den geokodierten Koordinaten der Flughäfen
 AIRPORT_COORDINATES = {
     'FXE': (26.197, -80.174), 'VNY': (34.209, -118.490), 'SUA': (27.247, -80.244),
     'CAK': (40.923, -81.442), 'MRY': (36.586, -121.870), 'APF': (26.146, -81.773),
@@ -52,78 +47,37 @@ AIRPORT_COORDINATES = {
     'PPM': (26.236, -80.106), 'SLT': (38.530, -106.012), 'CRE': (33.805, -78.692)
 }
 
-# Funktion zum Extrahieren des Airport-Codes aus dem Ort-String
 def extract_airport_code(location_str):
-    # Sucht nach Text in Klammern und nimmt den letzten Teil als Code
     match = re.search(r'\(([^)]+)\)', str(location_str))
     return match.group(1).split()[-1] if match else None
 
-# Funktion zum Laden und Vorbereiten der Daten
 @st.cache_data
 def load_data(file_path):
     df = pd.read_csv(file_path)
 
-    # Datenbereinigung und Typkonvertierung
     df['Datum'] = pd.to_datetime(df['Datum'], format='%d.%m.%Y', errors='coerce')
     df.dropna(subset=['Datum'], inplace=True)
     df.sort_values(by='Datum', inplace=True)
 
-    # Berechne die Flugnummer
     df['Flugnummer'] = np.arange(1, len(df) + 1)
 
-    # --- HIER ERFOLGT DIE GEOKODIERUNG ---
-    # Erzeuge Spalten für die Airport Codes
     df['Abflug_Code'] = df['Abflugort'].apply(extract_airport_code)
     df['Ziel_Code'] = df['Zielort'].apply(extract_airport_code)
 
-    # Ordne Längen- und Breitengrade zu (falls Code bekannt)
     df['lat'] = df['Abflug_Code'].apply(lambda x: AIRPORT_COORDINATES.get(x, (None, None))[0])
     df['lon'] = df['Abflug_Code'].apply(lambda x: AIRPORT_COORDINATES.get(x, (None, None))[1])
     df['Ziel_lat'] = df['Ziel_Code'].apply(lambda x: AIRPORT_COORDINATES.get(x, (None, None))[0])
     df['Ziel_lon'] = df['Ziel_Code'].apply(lambda x: AIRPORT_COORDINATES.get(x, (None, None))[1])
-    
-    # Für die Karte benötigen wir alle Punkte (Abflug und Ziel) in einer langen Liste
-    flight_lines = []
-    for index, row in df.iterrows():
-        # Abflugort (Startpunkt der Linie)
-        flight_lines.append({
-            'Flugnummer': row['Flugnummer'],
-            'Ort': row['Abflugort'],
-            'lat': row['lat'],
-            'lon': row['lon'],
-            'Typ': 'Start',
-            'Datum': row['Datum']
-        })
-        # Zielort (Endpunkt der Linie)
-        flight_lines.append({
-            'Flugnummer': row['Flugnummer'],
-            'Ort': row['Zielort'],
-            'lat': row['Ziel_lat'],
-            'lon': row['Ziel_lon'],
-            'Typ': 'Ziel',
-            'Datum': row['Datum']
-        })
 
-    df_map = pd.DataFrame(flight_lines).dropna(subset=['lat', 'lon'])
+    return df
 
-
-    return df, df_map
-
-# Daten laden
 try:
-    data, map_data = load_data(CSV_FILE)
+    data = load_data(CSV_FILE)
     total_flights = len(data)
-    if map_data.empty:
-         st.error("FEHLER: Konnte keine gültigen Koordinaten finden. Karte kann nicht dargestellt werden. Überprüfen Sie, ob die Flughafen-Codes in der AIRPORT_COORDINATES-Liste vorhanden sind.")
-         st.stop()
     st.success(f"Daten erfolgreich geladen. {total_flights} Flüge aus 2024.")
-except FileNotFoundError:
-    st.error(f"FEHLER: Die Datei '{CSV_FILE}' wurde nicht gefunden. Bitte prüfen Sie den Dateinamen und den Pfad im GitHub-Repository.")
-    st.stop()
 except Exception as e:
-    st.error(f"FEHLER beim Laden oder Verarbeiten der Daten: {e}")
+    st.error(f"FEHLER: {e}")
     st.stop()
-
 
 # --- 2. Seitentitel, Bilder und Einleitung ---
 st.title("✈️ Privatjet-Tracker für Bonuspunkte")
@@ -135,177 +89,108 @@ with col_img1:
 
 with col_text:
     st.header(f"Analyse der Privatjet-Flüge von Tom Cruise (2024)")
-    st.markdown(f"Analysiert **{total_flights}** Privatjet-Flüge von Tom Cruise (Bombardier Challenger 350 N350XX) im Jahr 2024.")
+    st.markdown(f"Analysiert **{total_flights}** Privatjet-Flüge im Jahr 2024.")
     st.markdown("---")
 
 with col_img2:
-    st.image("Bild 2.jpeg", caption="Flugzeugtyp: Bombardier Challenger 350 (N350XX)")
+    st.image("Bild 2.jpeg", caption="Bombardier Challenger 350 (N350XX)")
 
 st.markdown("---")
 
-
-# --- 3. Statistische Kennzahlen (KPIs) (Zahlenformat geändert) ---
+# --- 3. Statistische Kennzahlen ---
 st.header("📊 Statistische Kennzahlen")
 
-# Berechne Kennzahlen
 total_distance = data['Distanz (Meilen)'].sum()
 total_fuel = data['Treibstoffverbrauch (Gallons)'].sum()
 total_emissions = data['Emissionen (Metrische Tonnen)'].sum()
 avg_emissions_per_flight = data['Emissionen (Metrische Tonnen)'].mean()
 
-# Hilfsfunktion für die Formatierung (Punkt als Tausendertrenner, Komma als Dezimaltrennzeichen)
 def format_number_de(number, decimals=0):
-    if pd.isna(number):
-        return ""
-    # Verwende String-Formatierung für Tausendertrenner und ersetze dann Komma durch Punkt
     formatted = f"{number:,.{decimals}f}"
-    
-    # 1. Ersetze Komma (Dezimaltrennzeichen in US-Formatierung) durch temporäres Zeichen (z.B. Pipe)
-    formatted = formatted.replace(",", "|")
-    # 2. Ersetze Punkt (Tausendertrennzeichen in US-Formatierung) durch Komma
-    formatted = formatted.replace(".", ",")
-    # 3. Ersetze temporäres Zeichen durch Punkt (Dezimaltrennzeichen in DE-Formatierung)
-    formatted = formatted.replace("|", ".")
+    formatted = formatted.replace(",", "|").replace(".", ",").replace("|", ".")
     return formatted
 
 col1, col2, col3, col4, col5 = st.columns(5)
-
-with col1:
-    st.metric(label="Gesamtflüge (2024)", value=f"{total_flights}")
-
-with col2:
-    st.metric(label="Gesamtdistanz (Meilen)", value=format_number_de(total_distance))
-
-with col3:
-    st.metric(label="Gesamter Treibstoff (Gallons)", value=format_number_de(total_fuel))
-
-with col4:
-    st.metric(label="Gesamtemissionen (Metr. Tonnen CO₂)", value=format_number_de(total_emissions))
-
-with col5:
-    st.metric(label="Ø Emission pro Flug (Tonnen CO₂)", value=format_number_de(avg_emissions_per_flight, decimals=1))
+col1.metric("Gesamtflüge", f"{total_flights}")
+col2.metric("Gesamtdistanz (Meilen)", format_number_de(total_distance))
+col3.metric("Treibstoff (Gallons)", format_number_de(total_fuel))
+col4.metric("Emissionen (t CO₂)", format_number_de(total_emissions))
+col5.metric("Ø Emission pro Flug", format_number_de(avg_emissions_per_flight, 1))
 
 st.markdown("---")
 
-# --- 4. Interaktive Karte mit Schieberegler (Karte an Koordinaten angepasst) ---
-st.header("📍 Flugbahn auf der Karte")
-st.markdown("Nutzen Sie den **Schieberegler**, um die Flüge sukzessive darzustellen und die Flugbahn zu verfolgen.")
+# =====================================================================
+# ======================== 3D GLOBE – NEU ==============================
+# =====================================================================
 
-# Schieberegler für die Flugnummer (sukzessive Darstellung)
-max_flight = data['Flugnummer'].max()
-flight_slider = st.slider(
-    'Flüge bis zur Nummer:',
-    min_value=1,
-    max_value=max_flight,
-    value=max_flight,
-    step=1
-)
+st.header("🌍 3D-Weltkarte der Flugbahnen")
 
-# Daten für die Karte filtern
-filtered_map_data = map_data[map_data['Flugnummer'] <= flight_slider]
-filtered_data = data[data['Flugnummer'] <= flight_slider]
-latest_flight = filtered_data.iloc[-1] if not filtered_data.empty else None
+valid = data.dropna(subset=["lat", "lon", "Ziel_lat", "Ziel_lon"]).copy()
+valid["Route"] = valid["Abflug_Code"] + " → " + valid["Ziel_Code"]
+route_counts = valid["Route"].value_counts()
+valid["freq"] = valid["Route"].map(route_counts)
+
+max_freq = valid["freq"].max()
 
 fig = go.Figure()
 
-# Fügen Sie die Fluglinien hinzu (gruppiert nach Flugnummer)
-for flight_num in filtered_map_data['Flugnummer'].unique():
-    segment = filtered_map_data[filtered_map_data['Flugnummer'] == flight_num]
-    if len(segment) >= 2: # Muss mindestens Start- und Zielpunkt haben
-        # Fügt die Fluglinie hinzu
-        fig.add_trace(go.Scattermapbox(
-            mode="lines",
-            lon=segment['lon'],
-            lat=segment['lat'],
-            name=f"Flug {flight_num}",
-            line=dict(width=2, color='red'),
-            hoverinfo='text',
-            text=f"Flug {flight_num}: {segment.iloc[0]['Ort']} -> {segment.iloc[-1]['Ort']}",
-        ))
+for _, r in valid.iterrows():
+    red = int(255 * (r["freq"] / max_freq))
+    green = int(255 * (1 - r["freq"] / max_freq))
+    blue = 0
 
-# Füge die Flughafen-Punkte hinzu (alle Punkte, die im gefilterten Segment liegen)
-fig.add_trace(go.Scattermapbox(
-    mode="markers",
-    lon=filtered_map_data['lon'],
-    lat=filtered_map_data['lat'],
-    marker={'size': 8, 'color': 'blue'},
-    name='Flughäfen',
-    hoverinfo='text',
-    text=filtered_map_data['Ort']
-))
+    fig.add_trace(go.Scattergeo(
+        lon=[r["lon"], r["Ziel_lon"]],
+        lat=[r["lat"], r["Ziel_lat"]],
+        mode="lines",
+        line=dict(width=2, color=f"rgb({red},{green},{blue})"),
+        hoverinfo="text",
+        text=f"{r['Route']}<br>Geflogen: {r['freq']}×"
+    ))
 
-# Kartenlayout aktualisieren
+fig.update_geos(
+    projection_type="orthographic",
+    showland=True,
+    showcountries=True,
+    landcolor="lightgray",
+    countrycolor="gray",
+)
+
 fig.update_layout(
-    mapbox_style="open-street-map",
-    hovermode='closest',
-    margin={"r":0,"t":0,"l":0,"b":0},
-    mapbox=dict(
-        bearing=0,
-        center=dict(
-            lat=map_data['lat'].mean(),
-            lon=map_data['lon'].mean()
-        ),
-        pitch=0,
-        zoom=2.5
-    )
+    height=800,
+    title="3D-Globus – Routenhäufigkeit (Grün → Rot)"
 )
 
 st.plotly_chart(fig, use_container_width=True)
 
-if latest_flight is not None and pd.notna(latest_flight['Datum']):
-    st.info(f"""
-        **Aktueller Flug (Nr. {latest_flight['Flugnummer']}):**
-        * **Datum:** {latest_flight['Datum'].strftime('%d.%m.%Y')}
-        * **Route:** {latest_flight['Abflugort']} → {latest_flight['Zielort']}
-        * **Emissionen:** {format_number_de(latest_flight['Emissionen (Metrische Tonnen)'], decimals=1)} metrische Tonnen CO₂
-    """)
+st.info("🟩 Grün = einmal • 🟨 mittel • 🟥 oft")
 
 st.markdown("---")
 
-# --- 5. Vergleichsanalyse (Zahlenformat und Text angepasst) ---
-st.header("⚖️ Vergleich mit einer mittleren deutschen Kleinstadt")
-st.markdown(f"Hier stellen wir die **Gesamt-Jahres-CO₂-Emissionen (2024)** der {total_flights} Privatjet-Flüge in Relation zum geschätzten **jährlichen** CO₂-Ausstoß der **mittleren deutschen Kleinstadt Ingolstadt** (Platzhalterwert: $1.800.000$ Tonnen).")
+# --- 5. Vergleichsanalyse ---
+st.header("⚖️ Vergleich mit einer Kleinstadt")
 
-# Erzeuge einen DataFrame für das Balkendiagramm
 comparison_data = pd.DataFrame({
-    'Quelle': [
-        'Tom Cruise Privatjet-Flüge (2024 Gesamt)',
-        'Geschätzter CO₂-Ausstoß Ingolstadt (Jährlich)'
-    ],
-    'CO2 Emissionen (Metrische Tonnen)': [
-        total_emissions,
-        CO2_INGOLSTADT_ANNUAL_TONS
-    ]
+    'Quelle': ['Cruise-Flüge', 'Ingolstadt (jährlich)'],
+    'CO2': [total_emissions, CO2_INGOLSTADT_ANNUAL_TONS]
 })
 
-# Verhältnis berechnen
 ratio = (total_emissions / CO2_INGOLSTADT_ANNUAL_TONS) * 100
-ratio_formatted = format_number_de(ratio, decimals=4)
+ratio_formatted = format_number_de(ratio, 4)
 
-st.subheader("Balkendiagramm: CO₂-Emissionen im Jahresvergleich")
-fig_bar = px.bar(
-    comparison_data,
-    x='Quelle',
-    y='CO2 Emissionen (Metrische Tonnen)',
-    color='Quelle',
-    color_discrete_map={
-        'Tom Cruise Privatjet-Flüge (2024 Gesamt)': '#FF4B4B',
-        'Geschätzter CO₂-Ausstoß Ingolstadt (Jährlich)': '#0083B8'
-    },
-    labels={'CO2 Emissionen (Metrische Tonnen)':'CO₂-Emissionen (Metrische Tonnen)'}
-)
+fig_bar = px.bar(comparison_data, x='Quelle', y='CO2',
+                 color='Quelle',
+                 color_discrete_map={
+                     'Cruise-Flüge': '#FF4B4B',
+                     'Ingolstadt (jährlich)': '#0083B8'
+                 })
+
 st.plotly_chart(fig_bar, use_container_width=True)
 
-st.subheader("Verhältnis")
-st.success(
-    f"Die Gesamt-CO₂-Emissionen der {total_flights} Privatjet-Flüge von Tom Cruise (2024) "
-    f"entsprechen **{ratio_formatted}%** des geschätzten jährlichen CO₂-Ausstoßes von Ingolstadt."
-)
+st.success(f"Die Privatjet-Flüge entsprechen **{ratio_formatted}%** der jährlichen Emissionen von Ingolstadt.")
 
 st.markdown("---")
 
-# --- 6. Datenvorschau ---
+# --- 6. Rohdaten ---
 st.header("📋 Rohdaten")
 st.dataframe(data)
-
-# --- ENDE DES STREAMLIT-CODES ---

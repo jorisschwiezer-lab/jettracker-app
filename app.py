@@ -12,6 +12,7 @@ st.set_page_config(layout="wide", page_title="Tom Cruise Jet Tracker (2024)", pa
 CSV_FILE = 'tom_cruise_n350xx_flights.csv'
 CO2_INGOLSTADT_ANNUAL_TONS = 1800000
 
+# Dictionary bleibt wie bei dir (Airport-Codes, unvollständig → fehlende werden ignoriert)
 AIRPORT_COORDINATES = {
     'FXE': (26.197, -80.174), 'VNY': (34.209, -118.490), 'SUA': (27.247, -80.244),
     'CAK': (40.923, -81.442), 'MRY': (36.586, -121.870), 'APF': (26.146, -81.773),
@@ -48,17 +49,15 @@ AIRPORT_COORDINATES = {
 }
 
 def extract_airport_code(location_str):
-    match = re.search(r'\(([^)]+)\)', str(location_str))
-    return match.group(1).split()[-1] if match else None
+    m = re.search(r'\(([^)]+)\)', str(location_str))
+    return m.group(1).split()[-1] if m else None
 
 @st.cache_data
 def load_data(file_path):
     df = pd.read_csv(file_path)
-
     df['Datum'] = pd.to_datetime(df['Datum'], format='%d.%m.%Y', errors='coerce')
     df.dropna(subset=['Datum'], inplace=True)
     df.sort_values(by='Datum', inplace=True)
-
     df['Flugnummer'] = np.arange(1, len(df) + 1)
 
     df['Abflug_Code'] = df['Abflugort'].apply(extract_airport_code)
@@ -74,30 +73,26 @@ def load_data(file_path):
 try:
     data = load_data(CSV_FILE)
     total_flights = len(data)
-    st.success(f"Daten erfolgreich geladen. {total_flights} Flüge aus 2024.")
+    st.success(f"{total_flights} Flüge geladen.")
 except Exception as e:
-    st.error(f"FEHLER: {e}")
+    st.error(f"Fehler: {e}")
     st.stop()
 
-# --- 2. Seitentitel, Bilder und Einleitung ---
+# --- 2. Header & Bilder ---
 st.title("✈️ Privatjet-Tracker für Bonuspunkte")
 
-col_img1, col_text, col_img2 = st.columns([1, 2, 1])
-
-with col_img1:
-    st.image("image-w856.jpg.webp", caption="Berühmtheit: Tom Cruise")
-
-with col_text:
+colL, colM, colR = st.columns([1,2,1])
+with colL:
+    st.image("image-w856.jpg.webp")
+with colM:
     st.header(f"Analyse der Privatjet-Flüge von Tom Cruise (2024)")
-    st.markdown(f"Analysiert **{total_flights}** Privatjet-Flüge im Jahr 2024.")
-    st.markdown("---")
-
-with col_img2:
-    st.image("Bild 2.jpeg", caption="Bombardier Challenger 350 (N350XX)")
+    st.markdown(f"**{total_flights} Flüge** wurden analysiert.")
+with colR:
+    st.image("Bild 2.jpeg")
 
 st.markdown("---")
 
-# --- 3. Statistische Kennzahlen ---
+# --- 3. KPIs ---
 st.header("📊 Statistische Kennzahlen")
 
 total_distance = data['Distanz (Meilen)'].sum()
@@ -105,92 +100,97 @@ total_fuel = data['Treibstoffverbrauch (Gallons)'].sum()
 total_emissions = data['Emissionen (Metrische Tonnen)'].sum()
 avg_emissions_per_flight = data['Emissionen (Metrische Tonnen)'].mean()
 
-def format_number_de(number, decimals=0):
-    formatted = f"{number:,.{decimals}f}"
-    formatted = formatted.replace(",", "|").replace(".", ",").replace("|", ".")
-    return formatted
+def format_number_de(n, d=0):
+    f = f"{n:,.{d}f}"
+    return f.replace(",", "|").replace(".", ",").replace("|", ".")
 
-col1, col2, col3, col4, col5 = st.columns(5)
-col1.metric("Gesamtflüge", f"{total_flights}")
-col2.metric("Gesamtdistanz (Meilen)", format_number_de(total_distance))
-col3.metric("Treibstoff (Gallons)", format_number_de(total_fuel))
-col4.metric("Emissionen (t CO₂)", format_number_de(total_emissions))
-col5.metric("Ø Emission pro Flug", format_number_de(avg_emissions_per_flight, 1))
+c1,c2,c3,c4,c5 = st.columns(5)
+c1.metric("Flüge", total_flights)
+c2.metric("Distanz (Meilen)", format_number_de(total_distance))
+c3.metric("Treibstoff (Gallons)", format_number_de(total_fuel))
+c4.metric("Emissionen (t)", format_number_de(total_emissions))
+c5.metric("Ø Emission", format_number_de(avg_emissions_per_flight, 1))
 
 st.markdown("---")
 
 # =====================================================================
-# ======================== 3D GLOBE – NEU ==============================
+# ===================== SATELLITEN-WELTKARTE (NEU) ====================
 # =====================================================================
 
-st.header("🌍 3D-Weltkarte der Flugbahnen")
+st.header("🌍 Satellitenkarte der Flugrouten (Great-Circle)")
 
-valid = data.dropna(subset=["lat", "lon", "Ziel_lat", "Ziel_lon"]).copy()
+if "MAPBOX_TOKEN" not in st.secrets:
+    st.error("Kein MAPBOX_TOKEN gefunden! Bitte in secrets.toml hinzufügen.")
+else:
+    px.set_mapbox_access_token(st.secrets["MAPBOX_TOKEN"])
+
+valid = data.dropna(subset=["lat","lon","Ziel_lat","Ziel_lon"]).copy()
 valid["Route"] = valid["Abflug_Code"] + " → " + valid["Ziel_Code"]
-route_counts = valid["Route"].value_counts()
-valid["freq"] = valid["Route"].map(route_counts)
+freq = valid["Route"].value_counts()
+valid["freq"] = valid["Route"].map(freq)
+valid["line_width"] = valid["freq"].apply(lambda x: 1 + x*1.3)
 
-max_freq = valid["freq"].max()
+fig_map = go.Figure()
 
-fig = go.Figure()
+# Flughäfen als Punkte
+fig_map.add_trace(go.Scattermapbox(
+    lat=list(valid["lat"]) + list(valid["Ziel_lat"]),
+    lon=list(valid["lon"]) + list(valid["Ziel_lon"]),
+    mode="markers",
+    marker=dict(size=7, color="yellow"),
+    text=list(valid["Abflug_Code"]) + list(valid["Ziel_Code"]),
+    hoverinfo="text",
+    name="Airports"
+))
 
+# Flugrouten (Great Circle automatisch)
 for _, r in valid.iterrows():
-    red = int(255 * (r["freq"] / max_freq))
-    green = int(255 * (1 - r["freq"] / max_freq))
-    blue = 0
-
-    fig.add_trace(go.Scattergeo(
+    fig_map.add_trace(go.Scattermapbox(
+        mode="lines",
         lon=[r["lon"], r["Ziel_lon"]],
         lat=[r["lat"], r["Ziel_lat"]],
-        mode="lines",
-        line=dict(width=2, color=f"rgb({red},{green},{blue})"),
+        line=dict(width=r["line_width"], color="red"),
+        text=f"{r['Route']} – {r['freq']}×",
         hoverinfo="text",
-        text=f"{r['Route']}<br>Geflogen: {r['freq']}×"
+        name="Route"
     ))
 
-fig.update_geos(
-    projection_type="orthographic",
-    showland=True,
-    showcountries=True,
-    landcolor="lightgray",
-    countrycolor="gray",
+fig_map.update_layout(
+    mapbox=dict(
+        style="satellite",
+        center=dict(lat=20, lon=-30),
+        zoom=1.1
+    ),
+    height=900,
+    margin=dict(l=0, r=0, t=0, b=0)
 )
 
-fig.update_layout(
-    height=800,
-    title="3D-Globus – Routenhäufigkeit (Grün → Rot)"
-)
+st.plotly_chart(fig_map, use_container_width=True)
 
-st.plotly_chart(fig, use_container_width=True)
-
-st.info("🟩 Grün = einmal • 🟨 mittel • 🟥 oft")
+st.info("✈ **Dicke Linie = oft geflogen** • Gekrümmte Linien folgen der Erdkrümmung")
 
 st.markdown("---")
 
-# --- 5. Vergleichsanalyse ---
-st.header("⚖️ Vergleich mit einer Kleinstadt")
+# --- 5. Vergleich ---
+st.header("⚖ Vergleich der CO₂-Emissionen")
 
-comparison_data = pd.DataFrame({
-    'Quelle': ['Cruise-Flüge', 'Ingolstadt (jährlich)'],
-    'CO2': [total_emissions, CO2_INGOLSTADT_ANNUAL_TONS]
+df_cmp = pd.DataFrame({
+    "Quelle": ["Cruise-Flüge", "Ingolstadt (jährlich)"],
+    "CO2": [total_emissions, CO2_INGOLSTADT_ANNUAL_TONS]
 })
 
 ratio = (total_emissions / CO2_INGOLSTADT_ANNUAL_TONS) * 100
-ratio_formatted = format_number_de(ratio, 4)
+st.success(f"Die Flüge entsprechen **{format_number_de(ratio,4)}%** des Jahresausstoßes von Ingolstadt.")
 
-fig_bar = px.bar(comparison_data, x='Quelle', y='CO2',
-                 color='Quelle',
-                 color_discrete_map={
-                     'Cruise-Flüge': '#FF4B4B',
-                     'Ingolstadt (jährlich)': '#0083B8'
-                 })
-
-st.plotly_chart(fig_bar, use_container_width=True)
-
-st.success(f"Die Privatjet-Flüge entsprechen **{ratio_formatted}%** der jährlichen Emissionen von Ingolstadt.")
+st.plotly_chart(
+    px.bar(df_cmp, x="Quelle", y="CO2",
+           color="Quelle",
+           color_discrete_map={"Cruise-Flüge":"#FF4B4B","Ingolstadt (jährlich)":"#0083B8"})
+)
 
 st.markdown("---")
 
-# --- 6. Rohdaten ---
+# --- 6. Tabelle ---
 st.header("📋 Rohdaten")
 st.dataframe(data)
+

@@ -6,13 +6,13 @@ import plotly.graph_objects as go
 import re
 from datetime import datetime
 
-# --- 1. Konfiguration und Daten laden ---
+# --- 1. Konfiguration ---
 st.set_page_config(layout="wide", page_title="Tom Cruise Jet Tracker (2024)", page_icon="✈️")
 
 CSV_FILE = 'tom_cruise_n350xx_flights.csv'
 CO2_INGOLSTADT_ANNUAL_TONS = 1800000
 
-# Dictionary bleibt wie bei dir (Airport-Codes, unvollständig → fehlende werden ignoriert)
+# --- 2. Airport-Koordinaten ---
 AIRPORT_COORDINATES = {
     'FXE': (26.197, -80.174), 'VNY': (34.209, -118.490), 'SUA': (27.247, -80.244),
     'CAK': (40.923, -81.442), 'MRY': (36.586, -121.870), 'APF': (26.146, -81.773),
@@ -48,87 +48,84 @@ AIRPORT_COORDINATES = {
     'PPM': (26.236, -80.106), 'SLT': (38.530, -106.012), 'CRE': (33.805, -78.692)
 }
 
-def extract_airport_code(location_str):
-    m = re.search(r'\(([^)]+)\)', str(location_str))
-    return m.group(1).split()[-1] if m else None
+# --- 3. Hilfsfunktionen ---
+def extract_airport_code(text):
+    match = re.search(r'\(([^)]+)\)', str(text))
+    return match.group(1).split()[-1] if match else None
 
 @st.cache_data
-def load_data(file_path):
-    df = pd.read_csv(file_path)
+def load_data(path):
+    df = pd.read_csv(path)
     df['Datum'] = pd.to_datetime(df['Datum'], format='%d.%m.%Y', errors='coerce')
     df.dropna(subset=['Datum'], inplace=True)
-    df.sort_values(by='Datum', inplace=True)
+    df.sort_values('Datum', inplace=True)
     df['Flugnummer'] = np.arange(1, len(df) + 1)
-
     df['Abflug_Code'] = df['Abflugort'].apply(extract_airport_code)
     df['Ziel_Code'] = df['Zielort'].apply(extract_airport_code)
-
-    df['lat'] = df['Abflug_Code'].apply(lambda x: AIRPORT_COORDINATES.get(x, (None, None))[0])
-    df['lon'] = df['Abflug_Code'].apply(lambda x: AIRPORT_COORDINATES.get(x, (None, None))[1])
-    df['Ziel_lat'] = df['Ziel_Code'].apply(lambda x: AIRPORT_COORDINATES.get(x, (None, None))[0])
-    df['Ziel_lon'] = df['Ziel_Code'].apply(lambda x: AIRPORT_COORDINATES.get(x, (None, None))[1])
-
+    df['lat'] = df['Abflug_Code'].apply(lambda x: AIRPORT_COORDINATES.get(x, (None,None))[0])
+    df['lon'] = df['Abflug_Code'].apply(lambda x: AIRPORT_COORDINATES.get(x, (None,None))[1])
+    df['Ziel_lat'] = df['Ziel_Code'].apply(lambda x: AIRPORT_COORDINATES.get(x, (None,None))[0])
+    df['Ziel_lon'] = df['Ziel_Code'].apply(lambda x: AIRPORT_COORDINATES.get(x, (None,None))[1])
     return df
 
+# --- Lade Daten ---
 try:
     data = load_data(CSV_FILE)
     total_flights = len(data)
     st.success(f"{total_flights} Flüge geladen.")
 except Exception as e:
-    st.error(f"Fehler: {e}")
+    st.error(f"Fehler beim Laden: {e}")
     st.stop()
 
-# --- 2. Header & Bilder ---
-st.title("✈️ Privatjet-Tracker für Bonuspunkte")
+# --- 4. Header & Bilder ---
+st.title("✈️ Privatjet-Tracker – Tom Cruise 2024")
 
-colL, colM, colR = st.columns([1,2,1])
-with colL:
+col1, col2, col3 = st.columns([1,2,1])
+with col1:
     st.image("image-w856.jpg.webp")
-with colM:
-    st.header(f"Analyse der Privatjet-Flüge von Tom Cruise (2024)")
-    st.markdown(f"**{total_flights} Flüge** wurden analysiert.")
-with colR:
+with col2:
+    st.header("Analyse der Privatjet-Flüge von Tom Cruise")
+    st.markdown(f"**{total_flights} Flüge** im Jahr 2024 ausgewertet.")
+with col3:
     st.image("Bild 2.jpeg")
 
 st.markdown("---")
 
-# --- 3. KPIs ---
+# --- 5. KPIs ---
 st.header("📊 Statistische Kennzahlen")
-
 total_distance = data['Distanz (Meilen)'].sum()
 total_fuel = data['Treibstoffverbrauch (Gallons)'].sum()
 total_emissions = data['Emissionen (Metrische Tonnen)'].sum()
 avg_emissions_per_flight = data['Emissionen (Metrische Tonnen)'].mean()
 
-def format_number_de(n, d=0):
+def fmt(n, d=0):
     f = f"{n:,.{d}f}"
     return f.replace(",", "|").replace(".", ",").replace("|", ".")
 
-c1,c2,c3,c4,c5 = st.columns(5)
+c1, c2, c3, c4, c5 = st.columns(5)
 c1.metric("Flüge", total_flights)
-c2.metric("Distanz (Meilen)", format_number_de(total_distance))
-c3.metric("Treibstoff (Gallons)", format_number_de(total_fuel))
-c4.metric("Emissionen (t)", format_number_de(total_emissions))
-c5.metric("Ø Emission", format_number_de(avg_emissions_per_flight, 1))
+c2.metric("Distanz (Meilen)", fmt(total_distance))
+c3.metric("Treibstoff (Gallons)", fmt(total_fuel))
+c4.metric("Emissionen (t CO₂)", fmt(total_emissions))
+c5.metric("Ø Emission pro Flug", fmt(avg_emissions_per_flight, 1))
 
 st.markdown("---")
 
-# =====================================================================
-# ===================== SATELLITEN-WELTKARTE (NEU) ====================
-# =====================================================================
+# --------------------------------------------------------------------
+# --- 6. SATELLITEN-WELTKARTE – Great Circle + Airports + dicke Linien
+# --------------------------------------------------------------------
 
 st.header("🌍 Satellitenkarte der Flugrouten (Great-Circle)")
 
-if "MAPBOX_TOKEN" not in st.secrets:
-    st.error("Kein MAPBOX_TOKEN gefunden! Bitte in secrets.toml hinzufügen.")
-else:
-    px.set_mapbox_access_token(st.secrets["MAPBOX_TOKEN"])
+# Dein Mapbox Token (public, sicher):
+px.set_mapbox_access_token("pk.eyJ1Ijoiam9yaXNzY2h3IiwiYSI6ImNtaWs3Zms3ajBtM2EzZ3M0MHViZ2k1c28ifQ.gbuhPm3JU40TRRzXKWThbw")
 
+# Nur gültige Flüge nutzen
 valid = data.dropna(subset=["lat","lon","Ziel_lat","Ziel_lon"]).copy()
 valid["Route"] = valid["Abflug_Code"] + " → " + valid["Ziel_Code"]
 freq = valid["Route"].value_counts()
 valid["freq"] = valid["Route"].map(freq)
-valid["line_width"] = valid["freq"].apply(lambda x: 1 + x*1.3)
+valid["line_width"] = valid["freq"].apply(lambda x: 1 + x * 1.3)
 
 fig_map = go.Figure()
 
@@ -138,12 +135,12 @@ fig_map.add_trace(go.Scattermapbox(
     lon=list(valid["lon"]) + list(valid["Ziel_lon"]),
     mode="markers",
     marker=dict(size=7, color="yellow"),
-    text=list(valid["Abflug_Code"]) + list(valid["Ziel_Code"]),
     hoverinfo="text",
+    text=list(valid["Abflug_Code"]) + list(valid["Ziel_Code"]),
     name="Airports"
 ))
 
-# Flugrouten (Great Circle automatisch)
+# Fluglinien als Great-Circle
 for _, r in valid.iterrows():
     fig_map.add_trace(go.Scattermapbox(
         mode="lines",
@@ -167,30 +164,37 @@ fig_map.update_layout(
 
 st.plotly_chart(fig_map, use_container_width=True)
 
-st.info("✈ **Dicke Linie = oft geflogen** • Gekrümmte Linien folgen der Erdkrümmung")
+st.info("✈ **Dicke Linie = oft geflogen** – gekrümmte Linien folgen der Erdkrümmung.")
 
 st.markdown("---")
 
-# --- 5. Vergleich ---
-st.header("⚖ Vergleich der CO₂-Emissionen")
+# --- 7. Vergleich Ingolstadt ---
+st.header("⚖ CO₂-Vergleich mit einer deutschen Stadt")
 
 df_cmp = pd.DataFrame({
-    "Quelle": ["Cruise-Flüge", "Ingolstadt (jährlich)"],
+    "Quelle": ["Tom Cruise 2024", "Ingolstadt (Jahreswert)"],
     "CO2": [total_emissions, CO2_INGOLSTADT_ANNUAL_TONS]
 })
 
-ratio = (total_emissions / CO2_INGOLSTADT_ANNUAL_TONS) * 100
-st.success(f"Die Flüge entsprechen **{format_number_de(ratio,4)}%** des Jahresausstoßes von Ingolstadt.")
-
 st.plotly_chart(
-    px.bar(df_cmp, x="Quelle", y="CO2",
-           color="Quelle",
-           color_discrete_map={"Cruise-Flüge":"#FF4B4B","Ingolstadt (jährlich)":"#0083B8"})
+    px.bar(
+        df_cmp, x="Quelle", y="CO2",
+        color="Quelle",
+        color_discrete_map={
+            "Tom Cruise 2024": "#FF4B4B",
+            "Ingolstadt (Jahreswert)": "#0083B8"
+        }
+    ),
+    use_container_width=True
 )
+
+ratio = (total_emissions / CO2_INGOLSTADT_ANNUAL_TONS) * 100
+st.success(f"Tom Cruise verursacht **{fmt(ratio,4)} %** der Jahres-Emissionen von Ingolstadt.")
 
 st.markdown("---")
 
-# --- 6. Tabelle ---
+# --- 8. Rohdaten ---
 st.header("📋 Rohdaten")
 st.dataframe(data)
+
 

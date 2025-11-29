@@ -4,22 +4,38 @@ import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
 import re
-from datetime import datetime
 
 # ---------------------------------------------------
-# --- 1. Streamlit Grundkonfiguration
+# --- 1. Streamlit Einstellungen (Heller Modus)
 # ---------------------------------------------------
-st.set_page_config(layout="wide", page_title="Tom Cruise Jet Tracker (2024)", page_icon="✈️")
+st.set_page_config(
+    layout="wide",
+    page_title="Tom Cruise Jet Tracker (2024)",
+    page_icon="✈️",
+    initial_sidebar_state="expanded"
+)
 
-CSV_FILE = "tom_cruise_n350xx_flights.csv"
-CO2_INGOLSTADT_ANNUAL_TONS = 1_800_000
+# HELLES Layout erzwingen
+st.markdown("""
+    <style>
+        body { background-color: #F7F7F7 !important; color: black !important; }
+    </style>
+""", unsafe_allow_html=True)
 
-# Mapbox Token
+# ---------------------------------------------------
+# --- 2. Mapbox Token
+# ---------------------------------------------------
 MAPBOX_TOKEN = "pk.eyJ1Ijoiam9yaXNzY2h3IiwiYSI6ImNtaWs3Zms3ajBtM2EzZ3M0MHViZ2k1c28ifQ.gbuhPm3JU40TRRzXKWThbw"
 px.set_mapbox_access_token(MAPBOX_TOKEN)
 
 # ---------------------------------------------------
-# --- 2. Flughafen-Koordinaten
+# --- 3. CSV Pfad
+# ---------------------------------------------------
+CSV_FILE = "tom_cruise_n350xx_flights.csv"
+CO2_INGOLSTADT_ANNUAL_TONS = 1_800_000
+
+# ---------------------------------------------------
+# --- 4. Flughafen-Koordinaten
 # ---------------------------------------------------
 AIRPORT_COORDINATES = {
     'FXE': (26.197, -80.174), 'VNY': (34.209, -118.490), 'SUA': (27.247, -80.244),
@@ -44,82 +60,73 @@ AIRPORT_COORDINATES = {
     'GCM': (19.290, -81.358), 'RDU': (35.877, -78.789), 'SJT': (31.365, -100.505),
     'SAT': (29.534, -98.469), 'DEN': (39.862, -104.673), 'FNL': (40.451, -104.992),
     'MYR': (33.679, -78.928), 'EYF': (34.457, -78.618), 'TRI': (36.478, -82.408),
-    'BHM': (33.565, -86.757), 'ACK': (41.253, -70.061), 'SLK': (44.409, -74.209),
-    'PGA': (36.920, -111.455), 'SGR': (29.610, -95.660), 'DVT': (33.688, -112.072),
-    'PLN': (45.340, -84.795), 'BHB': (44.452, -68.309), 'MHH': (26.541, -77.062),
-    'OA9': (36.350, -82.167), 'BZN': (45.777, -111.157), 'FPR': (27.494, -80.840),
-    'FIL': (38.966, -112.443), 'CRQ': (33.109, -117.279), 'MMSF': (31.000, -114.770),
-    'MMSL': (22.956, -109.816), 'MYES': (24.160, -76.447), 'MBAC': (21.328, -71.558),
-    'PLS': (21.777, -72.266), 'ANU': (17.136, -61.792), 'OSU': (40.076, -83.075),
-    'LCI': (43.585, -71.428), 'JZI': (32.683, -80.053), 'SSI': (31.152, -81.391),
-    'PPM': (26.236, -80.106), 'SLT': (38.530, -106.012), 'CRE': (33.805, -78.692)
+    'BHM': (33.565, -86.757), 'ACK': (41.253, -70.061), 'SLK': (44.409, -74.209)
 }
 
 # ---------------------------------------------------
-# --- 3. Airport-Code aus Text extrahieren
+# --- 5. Airport-Code extrahieren
 # ---------------------------------------------------
-def extract_airport_code(location_str):
-    match = re.search(r"\(([^)]+)\)", str(location_str))
+def extract_airport_code(text):
+    match = re.search(r"\(([^)]+)\)", str(text))
     return match.group(1).split()[-1] if match else None
 
 # ---------------------------------------------------
-# --- 4. CSV Laden + Geokoordinaten zuordnen
+# --- 6. CSV laden + Koordinaten zuordnen
 # ---------------------------------------------------
 @st.cache_data
-def load_data(file_path):
-    df = pd.read_csv(file_path)
+def load_data(path):
+    df = pd.read_csv(path)
     df["Datum"] = pd.to_datetime(df["Datum"], format="%d.%m.%Y", errors="coerce")
     df.dropna(subset=["Datum"], inplace=True)
     df.sort_values("Datum", inplace=True)
-    df["Flugnummer"] = np.arange(1, len(df)+1)
 
+    df["Flugnummer"] = np.arange(1, len(df)+1)
     df["Abflug_Code"] = df["Abflugort"].apply(extract_airport_code)
     df["Ziel_Code"] = df["Zielort"].apply(extract_airport_code)
 
-    df["lat"] = df["Abflug_Code"].apply(lambda c: AIRPORT_COORDINATES.get(c, (None,None))[0])
-    df["lon"] = df["Abflug_Code"].apply(lambda c: AIRPORT_COORDINATES.get(c, (None,None))[1])
-    df["Ziel_lat"] = df["Ziel_Code"].apply(lambda c: AIRPORT_COORDINATES.get(c, (None,None))[0])
-    df["Ziel_lon"] = df["Ziel_Code"].apply(lambda c: AIRPORT_COORDINATES.get(c, (None,None))[1])
+    df["lat"]      = df["Abflug_Code"].apply(lambda c: AIRPORT_COORDINATES.get(c, (None, None))[0])
+    df["lon"]      = df["Abflug_Code"].apply(lambda c: AIRPORT_COORDINATES.get(c, (None, None))[1])
+    df["Ziel_lat"] = df["Ziel_Code"].apply(lambda c: AIRPORT_COORDINATES.get(c, (None, None))[0])
+    df["Ziel_lon"] = df["Ziel_Code"].apply(lambda c: AIRPORT_COORDINATES.get(c, (None, None))[1])
 
     return df
 
 data = load_data(CSV_FILE)
-total_flights = len(data)
 
 # ---------------------------------------------------
-# --- 5. Titel & Bilder
+# --- 7. Titel
 # ---------------------------------------------------
-st.title("✈️ Tom Cruise Privatjet-Tracker (2024)")
-st.markdown(f"**{total_flights} Flüge** des Bombardier Challenger 350 N350XX im Jahr 2024.")
+st.title("✈️ Tom Cruise Privatjet-Tracker 2024 (Satellitenkarte)")
 
 # ---------------------------------------------------
-# --- 6. Satellitenkarte mit Great-Circle Routen
+# --- 8. Great Circle Weltkarte
 # ---------------------------------------------------
-st.header("🌍 Satellitenkarte der Flugrouten (Great-Circle)")
+
+st.header("🌍 Weltkarte der Flugrouten (Great-Circle)")
 
 valid = data.dropna(subset=["lat","lon","Ziel_lat","Ziel_lon"]).copy()
 valid["Route"] = valid["Abflug_Code"] + " → " + valid["Ziel_Code"]
 
 freq = valid["Route"].value_counts()
 valid["freq"] = valid["Route"].map(freq)
-valid["line_width"] = valid["freq"].apply(lambda f: 1 + f * 1.3)
+valid["line_width"] = valid["freq"].apply(lambda f: 1 + f * 1.4)
 
-fig_map = go.Figure()
+fig = go.Figure()
 
 # Flughäfen
-fig_map.add_trace(go.Scattermapbox(
+fig.add_trace(go.Scattermapbox(
     lat=list(valid["lat"]) + list(valid["Ziel_lat"]),
     lon=list(valid["lon"]) + list(valid["Ziel_lon"]),
     mode="markers",
-    marker=dict(size=9, color="#FFD700", opacity=0.9),
+    marker=dict(size=10, color="yellow", opacity=0.9),
     hoverinfo="text",
     text=list(valid["Abflug_Code"]) + list(valid["Ziel_Code"]),
     name="Airports"
 ))
 
-# Fluglinien (Great Circle)
+# Routen
 for _, r in valid.iterrows():
-    fig_map.add_trace(go.Scattermapbox(
+    fig.add_trace(go.Scattermapbox(
         mode="lines",
         lon=[r["lon"], r["Ziel_lon"]],
         lat=[r["lat"], r["Ziel_lat"]],
@@ -129,7 +136,7 @@ for _, r in valid.iterrows():
         name="Route"
     ))
 
-fig_map.update_layout(
+fig.update_layout(
     mapbox=dict(
         style="satellite-streets",
         center=dict(lat=20, lon=-20),
@@ -139,27 +146,21 @@ fig_map.update_layout(
     margin=dict(l=0, r=0, t=0, b=0)
 )
 
-st.plotly_chart(fig_map, use_container_width=True)
+st.plotly_chart(fig, use_container_width=True)
 
 # ---------------------------------------------------
-# --- 7. KPIs
+# --- 9. KPIs
 # ---------------------------------------------------
 st.header("📊 Statistische Kennzahlen")
 
-def fmt(n): return f"{n:,.0f}".replace(",", ".")
+col1, col2, col3 = st.columns(3)
 
-total_distance = data["Distanz (Meilen)"].sum()
-total_fuel = data["Treibstoffverbrauch (Gallons)"].sum()
-total_em = data["Emissionen (Metrische Tonnen)"].sum()
-
-col1, col2, col3, col4 = st.columns(4)
-col1.metric("Gesamtflüge", total_flights)
-col2.metric("Gesamtdistanz (Meilen)", fmt(total_distance))
-col3.metric("Treibstoff (Gallons)", fmt(total_fuel))
-col4.metric("CO₂-Emissionen (t)", fmt(total_em))
+col1.metric("Gesamtflüge", len(data))
+col2.metric("Distanz (Meilen)", f"{data['Distanz (Meilen)'].sum():,.0f}".replace(",", "."))
+col3.metric("CO₂-Emissionen (t)", f"{data['Emissionen (Metrische Tonnen)'].sum():,.0f}".replace(",", "."))
 
 # ---------------------------------------------------
-# --- 8. Rohdaten anzeigen
+# --- 10. Rohdaten
 # ---------------------------------------------------
 st.header("📋 Rohdaten")
 st.dataframe(data)

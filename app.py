@@ -7,14 +7,49 @@ import re
 from datetime import datetime
 
 # --- 1. Konfiguration und Daten laden ---
+# Stellt den Light-Modus über die Plotly-Konfiguration sicher.
 st.set_page_config(layout="wide", page_title="Tom Cruise Jet Tracker (2024)", page_icon="✈️")
-
-# VOM BENUTZER BEREITGESTELLTER MAPBOX-TOKEN:
-# MAPBOX_TOKEN = "pk.eyJ1Ijoiam9yaXNzY2h3IiwiYSI6ImNtaWs3Zms3ajBtM2EzZ3M0MHViZ2k1c28ifQ.gbuhPm3JU40TRRzXKWThbw"
 
 CSV_FILE = 'tom_cruise_n350xx_flights.csv'
 CO2_INGOLSTADT_ANNUAL_TONS = 1800000
 
+# Zusätzliche Daten: Flughafennamen für bessere Benutzererfahrung
+AIRPORT_NAMES = {
+    'FXE': 'Fort Lauderdale Executive Airport', 'VNY': 'Van Nuys Airport', 'SUA': 'Witham Field (Stuart)',
+    'CAK': 'Akron-Canton Airport', 'MRY': 'Monterey Regional Airport', 'APF': 'Naples Municipal Airport',
+    'ASE': 'Aspen/Pitkin County Airport', 'APC': 'Napa County Airport', 'IND': 'Indianapolis International Airport',
+    'LAX': 'Los Angeles International Airport', 'PSP': 'Palm Springs International Airport', 'SJC': 'San Jose International Airport',
+    'PHL': 'Philadelphia International Airport', 'BOI': 'Boise Airport', 'SFB': 'Orlando Sanford International Airport',
+    'SNA': 'John Wayne Airport (Orange County)', 'LAS': 'Harry Reid International Airport', 'TEB': 'Teterboro Airport',
+    'ITH': 'Ithaca Tompkins International Airport', 'TWF': 'Magic Valley Regional Airport', 'SLC': 'Salt Lake City International Airport',
+    'COE': 'Coeur d\'Alene Airport', 'JAX': 'Jacksonville International Airport', 'PBI': 'Palm Beach International Airport',
+    'PNE': 'Northeast Philadelphia Airport', 'TPA': 'Tampa International Airport', 'SBP': 'San Luis Obispo County Regional Airport',
+    'BNA': 'Nashville International Airport', 'FCM': 'Flying Cloud Airport', 'IAD': 'Dulles International Airport',
+    'PVU': 'Provo Municipal Airport', 'HOU': 'William P. Hobby Airport', 'ISM': 'Kissimmee Gateway Airport',
+    'APA': 'Centennial Airport (Denver)', 'EGE': 'Eagle County Regional Airport', 'YUL': 'Montréal–Trudeau International Airport (CAN)',
+    'PWM': 'Portland International Jetport', 'SIG': 'Fernando Luis Ribas Dominicci Airport', 'LIR': 'Guanacaste Airport (Costa Rica)',
+    'ATL': 'Hartsfield–Jackson Atlanta International Airport', 'BTR': 'Baton Rouge Metropolitan Airport', 'ORD': 'O’Hare International Airport',
+    'CHA': 'Chattanooga Metropolitan Airport', 'MIA': 'Miami International Airport', 'LGA': 'LaGuardia Airport (NYC)',
+    'MMU': 'Morristown Municipal Airport', 'PTK': 'Oakland County International Airport', '1B1': 'Columbia County Airport',
+    'HPN': 'Westchester County Airport', 'DAL': 'Dallas Love Field', 'BCT': 'Boca Raton Airport',
+    'STT': 'Cyril E. King Airport (St. Thomas)', 'SJU': 'Luis Muñoz Marín International Airport', 'FLL': 'Fort Lauderdale–Hollywood International Airport',
+    'SAN': 'San Diego International Airport', 'UES': 'Waukesha County Airport', 'CID': 'The Eastern Iowa Airport',
+    'MDW': 'Midway International Airport', 'BQK': 'Brunswick Golden Isles Airport', 'GCM': 'Owen Roberts International Airport (Cayman)',
+    'RDU': 'Raleigh–Durham International Airport', 'SJT': 'San Angelo Regional Airport', 'SAT': 'San Antonio International Airport',
+    'DEN': 'Denver International Airport', 'FNL': 'Northern Colorado Regional Airport', 'MYR': 'Myrtle Beach International Airport',
+    'EYF': 'Curtis L. Brown Jr. Field', 'TRI': 'Tri-Cities Airport', 'BHM': 'Birmingham–Shuttlesworth International Airport',
+    'ACK': 'Nantucket Memorial Airport', 'SLK': 'Adirondack Regional Airport', 'PGA': 'Page Municipal Airport',
+    'SGR': 'Sugar Land Regional Airport', 'DVT': 'Deer Valley Airport (Phoenix)', 'PLN': 'Pellston Regional Airport',
+    'BHB': 'Hancock County–Bar Harbor Airport', 'MHH': 'Marsh Harbour Airport (Bahamas)', 'OA9': 'Watauga County Airport',
+    'BZN': 'Bozeman Yellowstone International Airport', 'FPR': 'St Lucie County International Airport', 'FIL': 'Faulkner County Airport',
+    'HTH': 'Hawthorne Municipal Airport', 'CRQ': 'McClellan–Palomar Airport', 'MMSF': 'San Felipe International Airport',
+    'MMSL': 'Los Cabos International Airport', 'MYES': 'Eleuthera Island Airport', 'MBAC': 'Matthew Town Airport',
+    'PLS': 'Providenciales International Airport', 'ANU': 'V. C. Bird International Airport', 'OSU': 'Ohio State University Airport',
+    'LCI': 'Laconia Municipal Airport', 'JZI': 'Charleston Executive Airport', 'SSI': 'Malcolm McKinnon Airport',
+    'PPM': 'Pompano Beach Airpark', 'SLT': 'Salida Airport', 'CRE': 'Grand Strand Airport',
+}
+
+# HINWEIS: Die Koordinaten müssen separat geführt werden, da AIRPORT_NAMES nur die Namen liefert.
 AIRPORT_COORDINATES = {
     'FXE': (26.197, -80.174), 'VNY': (34.209, -118.490), 'SUA': (27.247, -80.244),
     'CAK': (40.923, -81.442), 'MRY': (36.586, -121.870), 'APF': (26.146, -81.773),
@@ -71,6 +106,10 @@ def load_data(file_path):
     df['lon'] = df['Abflug_Code'].apply(lambda x: AIRPORT_COORDINATES.get(x, (None, None))[1])
     df['Ziel_lat'] = df['Ziel_Code'].apply(lambda x: AIRPORT_COORDINATES.get(x, (None, None))[0])
     df['Ziel_lon'] = df['Ziel_Code'].apply(lambda x: AIRPORT_COORDINATES.get(x, (None, None))[1])
+    
+    # Füge volle Namen hinzu
+    df['Abflug_Name'] = df['Abflug_Code'].apply(lambda x: AIRPORT_NAMES.get(x, x))
+    df['Ziel_Name'] = df['Ziel_Code'].apply(lambda x: AIRPORT_NAMES.get(x, x))
 
     return df
 
@@ -95,7 +134,6 @@ col_img1, col_text, col_img2 = st.columns([1, 2, 1])
 
 with col_img1:
     # Stellen Sie sicher, dass Sie diese Bilder lokal haben oder durch Platzhalter ersetzen
-    # Wenn die Bilder fehlen, kann es zu einem Fehler kommen.
     try:
         st.image("image-w856.jpg.webp", caption="Berühmtheit: Tom Cruise")
     except:
@@ -147,22 +185,25 @@ route_groups = valid.groupby("Route").agg(
     lat_end=('Ziel_lat', 'first'),
     lon_end=('Ziel_lon', 'first'),
     Abflugort=('Abflugort', 'first'),
-    Zielort=('Zielort', 'first')
+    Zielort=('Zielort', 'first'),
+    Abflug_Code=('Abflug_Code', 'first'),
+    Ziel_Code=('Ziel_Code', 'first')
 ).reset_index()
 
 max_freq = route_groups["count"].max()
 fig = go.Figure()
 
-# 1. Fluglinien (Bogenartig & Frequenzabhängig)
+# --- 1. Fluglinien (Bogenartig & Frequenzabhängig) ---
+# Die Linien werden automatisch bogenförmig in der 'orthographic' Projektion dargestellt.
 for _, r in route_groups.iterrows():
     # Berechnung der Liniendicke basierend auf der Frequenz (skaliert von 1 bis 8)
     line_thickness = 1 + 7 * (r["count"] / max_freq)
     
-    # Farbe von Grün (selten) nach Rot (häufig)
+    # Farbe von Blau-Grün (selten) nach Rot (häufig)
     normalized_freq = r["count"] / max_freq
     red = int(255 * normalized_freq)
-    green = int(255 * (1 - normalized_freq))
-    color_rgb = f"rgb({red},{green},50)"
+    green = int(255 * (1 - normalized_freq) * 0.7) # etwas dunkleres Grün
+    color_rgb = f"rgb({red},{green},100)"
     
     fig.add_trace(go.Scattergeo(
         lon=[r["lon_start"], r["lon_end"]],
@@ -170,57 +211,80 @@ for _, r in route_groups.iterrows():
         mode="lines",
         line=dict(width=line_thickness, color=color_rgb),
         hoverinfo="text",
-        text=f"Route: {r['Route']}<br>Flüge: {r['count']}x",
+        text=f"Route: {r['Abflugort']} → {r['Zielort']}<br>Flüge: {r['count']}x",
         showlegend=False
     ))
 
-# 2. Flughäfen (Stecknadeln/Punkte)
-# Sammeln aller einzigartigen Flughafen-Koordinaten und -Codes
+# --- 2. Flughäfen (Stecknadeln/Punkte) ---
 airport_coords = {}
-for code, (lat, lon) in AIRPORT_COORDINATES.items():
-    if lat is not None and lon is not None:
-        # Finde den zugehörigen Ort (optional, verbessert den Hover-Text)
-        # Hier ist keine einfache Zuordnung möglich, wir verwenden nur den Code
-        airport_coords[code] = {'lat': lat, 'lon': lon, 'code': code}
+airport_names_list = []
+airport_codes_list = []
 
-airport_codes = list(airport_coords.keys())
+# Sammeln aller eindeutigen Flughafen-Koordinaten und -Namen
+unique_codes = set(route_groups['Abflug_Code']).union(set(route_groups['Ziel_Code']))
+
+for code in unique_codes:
+    lat, lon = AIRPORT_COORDINATES.get(code, (None, None))
+    if lat is not None and lon is not None:
+        airport_coords[code] = {'lat': lat, 'lon': lon}
+        airport_names_list.append(AIRPORT_NAMES.get(code, f'Unbekannter Flughafen ({code})'))
+        airport_codes_list.append(code)
+
 airport_lats = [d['lat'] for d in airport_coords.values()]
 airport_lons = [d['lon'] for d in airport_coords.values()]
-airport_hover_text = ['Flughafen-Code: ' + code for code in airport_codes]
 
-
+# Plot Marker für Start- und Zielorte (Stecknadel-Effekt)
 fig.add_trace(go.Scattergeo(
     lon=airport_lons,
     lat=airport_lats,
     mode='markers',
     marker=dict(
-        size=10,
-        color='white',
+        size=8,
+        color='#FFFFFF', # Weiße Füllung
         symbol='circle',
-        line=dict(width=2, color='darkblue') # Stecknadel-Effekt
+        line=dict(width=1.5, color='#0056B3') # Dunkelblaue Umrandung
     ),
     hoverinfo='text',
-    text=airport_hover_text,
+    text=[f"Flughafen: {name} ({code})" for name, code in zip(airport_names_list, airport_codes_list)],
     name='Flughäfen'
 ))
 
+# --- 3. Flugrichtung (Pfeilmarkierungen an den Zielen) ---
+# Markiert das Ende jeder einzigartigen Route mit einem kleinen Dreieck
+fig.add_trace(go.Scattergeo(
+    lon=route_groups['lon_end'],
+    lat=route_groups['lat_end'],
+    mode='markers',
+    marker=dict(
+        size=6,
+        color='#FF4B4B', # Roter Punkt als Ziel
+        symbol='triangle-up', # Das Symbol wird auf der Kugel zum Himmel/Globus ausgerichtet
+        line=dict(width=1, color='#333333') 
+    ),
+    hoverinfo='text',
+    text=[f"ZIEL: {AIRPORT_NAMES.get(code, code)}" for code in route_groups['Ziel_Code']],
+    name='Flugrichtung',
+    showlegend=False
+))
 
-# 3. Globe-Konfiguration
+
+# --- 4. Globe-Konfiguration (Light Mode) ---
 fig.update_geos(
-    projection_type="orthographic", # Zeigt die Erde als 3D-Globus (bogenartige Fluglinien)
+    projection_type="orthographic", # 3D-Globus für bogenförmige Linien
     showland=True,
     showcountries=True,
-    landcolor="#EAEAEA",
-    countrycolor="#BDBDBD",
-    bgcolor="#F0F2F6", 
+    landcolor="#F5F5F5", # Hellgrau
+    countrycolor="#CCCCCC", # Mittleres Grau
+    bgcolor="#FFFFFF", # Hintergrund Weiß
     showocean=True,
-    oceancolor="#AECBEA" 
+    oceancolor="#E6F0FF" # Sehr helles Blau
 )
 
 fig.update_layout(
     height=800,
     title="3D-Globus der Flugrouten (Liniendicke = Frequenz)",
     margin={"r":0, "t":50, "l":0, "b":0},
+    title_font_color="#333333", # Dunkle Schrift für Light Mode
     # Setze die Startansicht auf die USA, wo die meisten Flüge stattfinden
     geo=dict(
         projection_rotation=dict(lon=-90, lat=40, roll=0), 
@@ -230,7 +294,7 @@ fig.update_layout(
 
 st.plotly_chart(fig, use_container_width=True)
 
-st.info("✈️ Linienbreite und Farbe zeigen die Häufigkeit der Route an (Grün/Dünn → Rot/Dick). Halten Sie die Maus über einen blauen Punkt, um den Flughafen-Code zu sehen.")
+st.info("✈️ Linienbreite und Farbe zeigen die Häufigkeit der Route an (Blau-Grün/Dünn → Rot/Dick). Die roten Markierungen kennzeichnen das Ziel und damit die Flugrichtung.")
 
 st.markdown("---")
 
@@ -248,9 +312,10 @@ ratio_formatted = format_number_de(ratio, 4)
 fig_bar = px.bar(comparison_data, x='Quelle', y='CO2',
                  color='Quelle',
                  color_discrete_map={
-                     'Cruise-Flüge': '#FF4B4B',
-                     'Ingolstadt (jährlich)': '#0083B8'
-                 })
+                     'Cruise-Flüge': '#FF4B4B', # Rot
+                     'Ingolstadt (jährlich)': '#0083B8' # Blau
+                 },
+                 template='plotly_white') # Setze Light Mode Template für den Bar-Chart
 
 st.plotly_chart(fig_bar, use_container_width=True)
 

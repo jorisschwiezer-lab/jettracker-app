@@ -2,52 +2,21 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.express as px
-import plotly.graph_objects as go
-import re
+import plotly.graph_objects as go # NEU: Für die Kartenlinien benötigt
+import re # KORRIGIERT: Fehlender Import für reguläre Ausdrücke
 from datetime import datetime
 
 # --- 1. Konfiguration und Daten laden ---
+# Das Layout der Seite auf "wide" setzen
 st.set_page_config(layout="wide", page_title="Tom Cruise Jet Tracker (2024)", page_icon="✈️")
 
+# Name der CSV-Datei (Daten aus 2024)
 CSV_FILE = 'tom_cruise_n350xx_flights.csv'
+
+# Konstante für den CO2-Vergleich (Jährliche CO2-Emissionen der Vergleichsstadt)
 CO2_INGOLSTADT_ANNUAL_TONS = 1800000
 
-# Zusätzliche Daten: Flughafennamen und Koordinaten
-AIRPORT_NAMES = {
-    'FXE': 'Fort Lauderdale Executive Airport', 'VNY': 'Van Nuys Airport', 'SUA': 'Witham Field (Stuart)',
-    'CAK': 'Akron-Canton Airport', 'MRY': 'Monterey Regional Airport', 'APF': 'Naples Municipal Airport',
-    'ASE': 'Aspen/Pitkin County Airport', 'APC': 'Napa County Airport', 'IND': 'Indianapolis International Airport',
-    'LAX': 'Los Angeles International Airport', 'PSP': 'Palm Springs International Airport', 'SJC': 'San Jose International Airport',
-    'PHL': 'Philadelphia International Airport', 'BOI': 'Boise Airport', 'SFB': 'Orlando Sanford International Airport',
-    'SNA': 'John Wayne Airport (Orange County)', 'LAS': 'Harry Reid International Airport', 'TEB': 'Teterboro Airport',
-    'ITH': 'Ithaca Tompkins International Airport', 'TWF': 'Magic Valley Regional Airport', 'SLC': 'Salt Lake City International Airport',
-    'COE': 'Coeur d\'Alene Airport', 'JAX': 'Jacksonville International Airport', 'PBI': 'Palm Beach International Airport',
-    'PNE': 'Northeast Philadelphia Airport', 'TPA': 'Tampa International Airport', 'SBP': 'San Luis Obispo County Regional Airport',
-    'BNA': 'Nashville International Airport', 'FCM': 'Flying Cloud Airport', 'IAD': 'Dulles International Airport',
-    'PVU': 'Provo Municipal Airport', 'HOU': 'William P. Hobby Airport', 'ISM': 'Kissimmee Gateway Airport',
-    'APA': 'Centennial Airport (Denver)', 'EGE': 'Eagle County Regional Airport', 'YUL': 'Montréal–Trudeau International Airport (CAN)',
-    'PWM': 'Portland International Jetport', 'SIG': 'Fernando Luis Ribas Dominicci Airport', 'LIR': 'Guanacaste Airport (Costa Rica)',
-    'ATL': 'Hartsfield–Jackson Atlanta International Airport', 'BTR': 'Baton Rouge Metropolitan Airport', 'ORD': 'O’Hare International Airport',
-    'CHA': 'Chattanooga Metropolitan Airport', 'MIA': 'Miami International Airport', 'LGA': 'LaGuardia Airport (NYC)',
-    'MMU': 'Morristown Municipal Airport', 'PTK': 'Oakland County International Airport', '1B1': 'Columbia County Airport',
-    'HPN': 'Westchester County Airport', 'DAL': 'Dallas Love Field', 'BCT': 'Boca Raton Airport',
-    'STT': 'Cyril E. King Airport (St. Thomas)', 'SJU': 'Luis Muñoz Marín International Airport', 'FLL': 'Fort Lauderdale–Hollywood International Airport',
-    'SAN': 'San Diego International Airport', 'UES': 'Waukesha County Airport', 'CID': 'The Eastern Iowa Airport',
-    'MDW': 'Midway International Airport', 'BQK': 'Brunswick Golden Isles Airport', 'GCM': 'Owen Roberts International Airport (Cayman)',
-    'RDU': 'Raleigh–Durham International Airport', 'SJT': 'San Angelo Regional Airport', 'SAT': 'San Antonio International Airport',
-    'DEN': 'Denver International Airport', 'FNL': 'Northern Colorado Regional Airport', 'MYR': 'Myrtle Beach International Airport',
-    'EYF': 'Curtis L. Brown Jr. Field', 'TRI': 'Tri-Cities Airport', 'BHM': 'Birmingham–Shuttlesworth International Airport',
-    'ACK': 'Nantucket Memorial Airport', 'SLK': 'Adirondack Regional Airport', 'PGA': 'Page Municipal Airport',
-    'SGR': 'Sugar Land Regional Airport', 'DVT': 'Deer Valley Airport (Phoenix)', 'PLN': 'Pellston Regional Airport',
-    'BHB': 'Hancock County–Bar Harbor Airport', 'MHH': 'Marsh Harbour Airport (Bahamas)', 'OA9': 'Watauga County Airport',
-    'BZN': 'Bozeman Yellowstone International Airport', 'FPR': 'St Lucie County International Airport', 'FIL': 'Faulkner County Airport',
-    'HTH': 'Hawthorne Municipal Airport', 'CRQ': 'McClellan–Palomar Airport', 'MMSF': 'San Felipe International Airport',
-    'MMSL': 'Los Cabos International Airport', 'MYES': 'Eleuthera Island Airport', 'MBAC': 'Matthew Town Airport',
-    'PLS': 'Providenciales International Airport', 'ANU': 'V. C. Bird International Airport', 'OSU': 'Ohio State University Airport',
-    'LCI': 'Laconia Municipal Airport', 'JZI': 'Charleston Executive Airport', 'SSI': 'Malcolm McKinnon Airport',
-    'PPM': 'Pompano Beach Airpark', 'SLT': 'Salida Airport', 'CRE': 'Grand Strand Airport',
-}
-
+# Dictionary mit den geokodierten Koordinaten der Flughäfen
 AIRPORT_COORDINATES = {
     'FXE': (26.197, -80.174), 'VNY': (34.209, -118.490), 'SUA': (27.247, -80.244),
     'CAK': (40.923, -81.442), 'MRY': (36.586, -121.870), 'APF': (26.146, -81.773),
@@ -83,240 +52,260 @@ AIRPORT_COORDINATES = {
     'PPM': (26.236, -80.106), 'SLT': (38.530, -106.012), 'CRE': (33.805, -78.692)
 }
 
+# Funktion zum Extrahieren des Airport-Codes aus dem Ort-String
 def extract_airport_code(location_str):
+    # Sucht nach Text in Klammern und nimmt den letzten Teil als Code
     match = re.search(r'\(([^)]+)\)', str(location_str))
     return match.group(1).split()[-1] if match else None
 
+# Funktion zum Laden und Vorbereiten der Daten
 @st.cache_data
 def load_data(file_path):
     df = pd.read_csv(file_path)
 
+    # Datenbereinigung und Typkonvertierung
     df['Datum'] = pd.to_datetime(df['Datum'], format='%d.%m.%Y', errors='coerce')
     df.dropna(subset=['Datum'], inplace=True)
     df.sort_values(by='Datum', inplace=True)
 
+    # Berechne die Flugnummer
     df['Flugnummer'] = np.arange(1, len(df) + 1)
-    df['Datum_str'] = df['Datum'].dt.strftime('%d.%m.%Y')
 
+    # --- HIER ERFOLGT DIE GEOKODIERUNG ---
+    # Erzeuge Spalten für die Airport Codes
     df['Abflug_Code'] = df['Abflugort'].apply(extract_airport_code)
     df['Ziel_Code'] = df['Zielort'].apply(extract_airport_code)
 
+    # Ordne Längen- und Breitengrade zu (falls Code bekannt)
     df['lat'] = df['Abflug_Code'].apply(lambda x: AIRPORT_COORDINATES.get(x, (None, None))[0])
     df['lon'] = df['Abflug_Code'].apply(lambda x: AIRPORT_COORDINATES.get(x, (None, None))[1])
     df['Ziel_lat'] = df['Ziel_Code'].apply(lambda x: AIRPORT_COORDINATES.get(x, (None, None))[0])
     df['Ziel_lon'] = df['Ziel_Code'].apply(lambda x: AIRPORT_COORDINATES.get(x, (None, None))[1])
     
-    df['Abflug_Name'] = df['Abflug_Code'].apply(lambda x: AIRPORT_NAMES.get(x, x))
-    df['Ziel_Name'] = df['Ziel_Code'].apply(lambda x: AIRPORT_NAMES.get(x, x))
+    # Für die Karte benötigen wir alle Punkte (Abflug und Ziel) in einer langen Liste
+    flight_lines = []
+    for index, row in df.iterrows():
+        # Abflugort (Startpunkt der Linie)
+        flight_lines.append({
+            'Flugnummer': row['Flugnummer'],
+            'Ort': row['Abflugort'],
+            'lat': row['lat'],
+            'lon': row['lon'],
+            'Typ': 'Start',
+            'Datum': row['Datum']
+        })
+        # Zielort (Endpunkt der Linie)
+        flight_lines.append({
+            'Flugnummer': row['Flugnummer'],
+            'Ort': row['Zielort'],
+            'lat': row['Ziel_lat'],
+            'lon': row['Ziel_lon'],
+            'Typ': 'Ziel',
+            'Datum': row['Datum']
+        })
 
-    return df
+    df_map = pd.DataFrame(flight_lines).dropna(subset=['lat', 'lon'])
 
+
+    return df, df_map
+
+# Daten laden
 try:
-    data = load_data(CSV_FILE)
+    data, map_data = load_data(CSV_FILE)
     total_flights = len(data)
+    if map_data.empty:
+         st.error("FEHLER: Konnte keine gültigen Koordinaten finden. Karte kann nicht dargestellt werden. Überprüfen Sie, ob die Flughafen-Codes in der AIRPORT_COORDINATES-Liste vorhanden sind.")
+         st.stop()
     st.success(f"Daten erfolgreich geladen. {total_flights} Flüge aus 2024.")
+except FileNotFoundError:
+    st.error(f"FEHLER: Die Datei '{CSV_FILE}' wurde nicht gefunden. Bitte prüfen Sie den Dateinamen und den Pfad im GitHub-Repository.")
+    st.stop()
 except Exception as e:
-    st.error(f"FEHLER: Die Datei '{CSV_FILE}' konnte nicht geladen werden oder ist ungültig. Details: {e}")
+    st.error(f"FEHLER beim Laden oder Verarbeiten der Daten: {e}")
     st.stop()
 
-def format_number_de(number, decimals=0):
-    formatted = f"{number:,.{decimals}f}"
-    formatted = formatted.replace(",", "|").replace(".", ",").replace("|", ".")
-    return formatted
 
-# --- 2. Kopfzeile und Statistische Kennzahlen (Statisch) ---
+# --- 2. Seitentitel, Bilder und Einleitung ---
 st.title("✈️ Privatjet-Tracker für Bonuspunkte")
 
 col_img1, col_text, col_img2 = st.columns([1, 2, 1])
+
+with col_img1:
+    st.image("image-w856.jpg.webp", caption="Berühmtheit: Tom Cruise")
+
 with col_text:
     st.header(f"Analyse der Privatjet-Flüge von Tom Cruise (2024)")
-    st.markdown(f"Analysiert **{total_flights}** Privatjet-Flüge im Jahr 2024.")
+    st.markdown(f"Analysiert **{total_flights}** Privatjet-Flüge von Tom Cruise (Bombardier Challenger 350 N350XX) im Jahr 2024.")
     st.markdown("---")
 
-# Platzhalter für Bilder
-with col_img1:
-    st.markdown("<!-- Bild 1 Placeholder -->")
 with col_img2:
-    st.markdown("<!-- Bild 2 Placeholder -->")
+    st.image("Bild 2.jpeg", caption="Flugzeugtyp: Bombardier Challenger 350 (N350XX)")
 
-# Statistische Kennzahlen
+st.markdown("---")
+
+
+# --- 3. Statistische Kennzahlen (KPIs) (Zahlenformat geändert) ---
+st.header("📊 Statistische Kennzahlen")
+
+# Berechne Kennzahlen
 total_distance = data['Distanz (Meilen)'].sum()
 total_fuel = data['Treibstoffverbrauch (Gallons)'].sum()
 total_emissions = data['Emissionen (Metrische Tonnen)'].sum()
 avg_emissions_per_flight = data['Emissionen (Metrische Tonnen)'].mean()
 
-st.header("📊 Statistische Kennzahlen")
+# Hilfsfunktion für die Formatierung (Punkt als Tausendertrenner, Komma als Dezimaltrennzeichen)
+def format_number_de(number, decimals=0):
+    if pd.isna(number):
+        return ""
+    # Verwende String-Formatierung für Tausendertrenner und ersetze dann Komma durch Punkt
+    formatted = f"{number:,.{decimals}f}"
+    
+    # 1. Ersetze Komma (Dezimaltrennzeichen in US-Formatierung) durch temporäres Zeichen (z.B. Pipe)
+    formatted = formatted.replace(",", "|")
+    # 2. Ersetze Punkt (Tausendertrennzeichen in US-Formatierung) durch Komma
+    formatted = formatted.replace(".", ",")
+    # 3. Ersetze temporäres Zeichen durch Punkt (Dezimaltrennzeichen in DE-Formatierung)
+    formatted = formatted.replace("|", ".")
+    return formatted
+
 col1, col2, col3, col4, col5 = st.columns(5)
-col1.metric("Gesamtflüge", f"{total_flights}")
-col2.metric("Gesamtdistanz (Meilen)", format_number_de(total_distance))
-col3.metric("Treibstoff (Gallons)", format_number_de(total_fuel))
-col4.metric("Emissionen (t CO₂)", format_number_de(total_emissions))
-col5.metric("Ø Emission pro Flug", format_number_de(avg_emissions_per_flight, 1))
+
+with col1:
+    st.metric(label="Gesamtflüge (2024)", value=f"{total_flights}")
+
+with col2:
+    st.metric(label="Gesamtdistanz (Meilen)", value=format_number_de(total_distance))
+
+with col3:
+    st.metric(label="Gesamter Treibstoff (Gallons)", value=format_number_de(total_fuel))
+
+with col4:
+    st.metric(label="Gesamtemissionen (Metr. Tonnen CO₂)", value=format_number_de(total_emissions))
+
+with col5:
+    st.metric(label="Ø Emission pro Flug (Tonnen CO₂)", value=format_number_de(avg_emissions_per_flight, decimals=1))
 
 st.markdown("---")
 
-# =====================================================================
-# ======================== 3. Interaktive Flugverfolgung ================
-# =====================================================================
+# --- 4. Interaktive Karte mit Schieberegler (Karte an Koordinaten angepasst) ---
+st.header("📍 Flugbahn auf der Karte")
+st.markdown("Nutzen Sie den **Schieberegler**, um die Flüge sukzessive darzustellen und die Flugbahn zu verfolgen.")
 
-st.header("🗓️ Interaktive Flugverfolgung (2024)")
-
-# --- 3a. Kalender/Datumsauswahl ---
-unique_dates = data['Datum_str'].unique()
-selected_date_str = st.selectbox(
-    "1. Flugdatum wählen (Kalender-Simulation):",
-    options=unique_dates,
-    index=0,
-    help="Wählen Sie ein Datum, an dem Flüge stattfanden."
+# Schieberegler für die Flugnummer (sukzessive Darstellung)
+max_flight = data['Flugnummer'].max()
+flight_slider = st.slider(
+    'Flüge bis zur Nummer:',
+    min_value=1,
+    max_value=max_flight,
+    value=max_flight,
+    step=1
 )
 
-filtered_flights = data[data['Datum_str'] == selected_date_str].reset_index(drop=True)
+# Daten für die Karte filtern
+filtered_map_data = map_data[map_data['Flugnummer'] <= flight_slider]
+filtered_data = data[data['Flugnummer'] <= flight_slider]
+latest_flight = filtered_data.iloc[-1] if not filtered_data.empty else None
 
-# --- 3b. Flugauswahl ---
-if not filtered_flights.empty:
-    flight_options = [
-        f"{row['Abflug_Name']} ({row['Abflug_Code']}) → {row['Ziel_Name']} ({row['Ziel_Code']})"
-        for index, row in filtered_flights.iterrows()
-    ]
-    
-    selected_flight_option = st.selectbox(
-        f"2. Flug auf dem Datum ({selected_date_str}) wählen:",
-        options=flight_options,
-        index=0
-    )
-    
-    # Ausgewählter Flug extrahieren
-    selected_index = flight_options.index(selected_flight_option)
-    flight_data = filtered_flights.iloc[selected_index]
-    
-    # --- 3c. Fortschrittsregler ---
-    st.subheader(f"Flug: {flight_data['Abflug_Code']} → {flight_data['Ziel_Code']} am {selected_date_str}")
-    progress = st.slider(
-        "3. Fortschritt des Fluges (Flugzeug steuern):",
-        min_value=0,
-        max_value=100,
-        value=0,
-        step=1,
-        format="%d %%"
-    ) / 100.0
-    
-    # --- Berechnung der aktuellen Flugzeugposition (Interpolation) ---
-    lat_start, lon_start = flight_data['lat'], flight_data['lon']
-    lat_end, lon_end = flight_data['Ziel_lat'], flight_data['Ziel_lon']
-    
-    # Lineare Interpolation für die Position des Flugzeugs
-    current_lat = lat_start + progress * (lat_end - lat_start)
-    current_lon = lon_start + progress * (lon_end - lon_start)
+fig = go.Figure()
 
-    # --- 3d. Map Visualisierung ---
-    fig = go.Figure()
+# Fügen Sie die Fluglinien hinzu (gruppiert nach Flugnummer)
+for flight_num in filtered_map_data['Flugnummer'].unique():
+    segment = filtered_map_data[filtered_map_data['Flugnummer'] == flight_num]
+    if len(segment) >= 2: # Muss mindestens Start- und Zielpunkt haben
+        # Fügt die Fluglinie hinzu
+        fig.add_trace(go.Scattermapbox(
+            mode="lines",
+            lon=segment['lon'],
+            lat=segment['lat'],
+            name=f"Flug {flight_num}",
+            line=dict(width=2, color='red'),
+            hoverinfo='text',
+            text=f"Flug {flight_num}: {segment.iloc[0]['Ort']} -> {segment.iloc[-1]['Ort']}",
+        ))
 
-    # 1. Die gesamte Flugbahn (Bogen)
-    fig.add_trace(go.Scattergeo(
-        lon=[lon_start, lon_end],
-        lat=[lat_start, lat_end],
-        mode="lines",
-        line=dict(width=4, color='#FF4B4B'), # Rot für die aktive Bahn
-        hoverinfo="text",
-        text=selected_flight_option,
-        name='Flugbahn'
-    ))
+# Füge die Flughafen-Punkte hinzu (alle Punkte, die im gefilterten Segment liegen)
+fig.add_trace(go.Scattermapbox(
+    mode="markers",
+    lon=filtered_map_data['lon'],
+    lat=filtered_map_data['lat'],
+    marker={'size': 8, 'color': 'blue'},
+    name='Flughäfen',
+    hoverinfo='text',
+    text=filtered_map_data['Ort']
+))
 
-    # 2. Startpunkt
-    fig.add_trace(go.Scattergeo(
-        lon=[lon_start], lat=[lat_start],
-        mode='markers',
-        marker=dict(size=10, color='darkgreen', symbol='circle'),
-        hoverinfo='text',
-        text=[f"Start: {flight_data['Abflug_Name']} ({flight_data['Abflug_Code']})"],
-        name='Start'
-    ))
-
-    # 3. Zielpunkt (mit Richtung)
-    fig.add_trace(go.Scattergeo(
-        lon=[lon_end], lat=[lat_end],
-        mode='markers',
-        marker=dict(size=10, color='#0056B3', symbol='star'),
-        hoverinfo='text',
-        text=[f"Ziel: {flight_data['Ziel_Name']} ({flight_data['Ziel_Code']})"],
-        name='Ziel'
-    ))
-
-    # 4. Flugzeugsymbol (Aktuelle Position)
-    fig.add_trace(go.Scattergeo(
-        lon=[current_lon], lat=[current_lat],
-        mode='markers',
-        marker=dict(
-            size=15, 
-            color='#333333', 
-            symbol='triangle-up', 
-            line=dict(width=1, color='white')
+# Kartenlayout aktualisieren
+fig.update_layout(
+    mapbox_style="open-street-map",
+    hovermode='closest',
+    margin={"r":0,"t":0,"l":0,"b":0},
+    mapbox=dict(
+        bearing=0,
+        center=dict(
+            lat=map_data['lat'].mean(),
+            lon=map_data['lon'].mean()
         ),
-        hoverinfo='text',
-        text=[f"Flugzeug: {int(progress*100)}%"],
-        name='Aktuelle Position'
-    ))
-
-    # Globe-Konfiguration (Light Mode)
-    fig.update_geos(
-        projection_type="orthographic", # 3D-Globus für bogenförmige Linien
-        showland=True,
-        showcountries=True,
-        landcolor="#F5F5F5",
-        countrycolor="#CCCCCC",
-        bgcolor="#FFFFFF",
-        showocean=True,
-        oceancolor="#E6F0FF"
+        pitch=0,
+        zoom=2.5
     )
+)
 
-    # Automatische Zentrierung der Karte um den Flug
-    center_lat = (lat_start + lat_end) / 2
-    center_lon = (lon_start + lon_end) / 2
-    
-    fig.update_layout(
-        height=700,
-        title=f"Verfolgung des Fluges {flight_data['Abflug_Code']} → {flight_data['Ziel_Code']}",
-        title_font_color="#333333",
-        geo=dict(
-            projection_rotation=dict(lon=-center_lon, lat=-center_lat, roll=0), 
-            center=dict(lon=center_lon, lat=center_lat),
-            scope='world'
-        )
-    )
+st.plotly_chart(fig, use_container_width=True)
 
-    st.plotly_chart(fig, use_container_width=True)
-    
-else:
-    st.warning("Für dieses Datum sind keine gültigen Flüge verfügbar.")
-
+if latest_flight is not None and pd.notna(latest_flight['Datum']):
+    st.info(f"""
+        **Aktueller Flug (Nr. {latest_flight['Flugnummer']}):**
+        * **Datum:** {latest_flight['Datum'].strftime('%d.%m.%Y')}
+        * **Route:** {latest_flight['Abflugort']} → {latest_flight['Zielort']}
+        * **Emissionen:** {format_number_de(latest_flight['Emissionen (Metrische Tonnen)'], decimals=1)} metrische Tonnen CO₂
+    """)
 
 st.markdown("---")
 
-# --- 4. Vergleichsanalyse ---
-st.header("⚖️ Vergleich mit einer Kleinstadt")
+# --- 5. Vergleichsanalyse (Zahlenformat und Text angepasst) ---
+st.header("⚖️ Vergleich mit einer mittleren deutschen Kleinstadt")
+st.markdown(f"Hier stellen wir die **Gesamt-Jahres-CO₂-Emissionen (2024)** der {total_flights} Privatjet-Flüge in Relation zum geschätzten **jährlichen** CO₂-Ausstoß der **mittleren deutschen Kleinstadt Ingolstadt** (Platzhalterwert: $1.800.000$ Tonnen).")
 
+# Erzeuge einen DataFrame für das Balkendiagramm
 comparison_data = pd.DataFrame({
-    'Quelle': ['Cruise-Flüge', 'Ingolstadt (jährlich)'],
-    'CO2': [total_emissions, CO2_INGOLSTADT_ANNUAL_TONS]
+    'Quelle': [
+        'Tom Cruise Privatjet-Flüge (2024 Gesamt)',
+        'Geschätzter CO₂-Ausstoß Ingolstadt (Jährlich)'
+    ],
+    'CO2 Emissionen (Metrische Tonnen)': [
+        total_emissions,
+        CO2_INGOLSTADT_ANNUAL_TONS
+    ]
 })
 
+# Verhältnis berechnen
 ratio = (total_emissions / CO2_INGOLSTADT_ANNUAL_TONS) * 100
-ratio_formatted = format_number_de(ratio, 4)
+ratio_formatted = format_number_de(ratio, decimals=4)
 
-fig_bar = px.bar(comparison_data, x='Quelle', y='CO2',
-                 color='Quelle',
-                 color_discrete_map={
-                     'Cruise-Flüge': '#FF4B4B',
-                     'Ingolstadt (jährlich)': '#0083B8'
-                 },
-                 template='plotly_white')
-
+st.subheader("Balkendiagramm: CO₂-Emissionen im Jahresvergleich")
+fig_bar = px.bar(
+    comparison_data,
+    x='Quelle',
+    y='CO2 Emissionen (Metrische Tonnen)',
+    color='Quelle',
+    color_discrete_map={
+        'Tom Cruise Privatjet-Flüge (2024 Gesamt)': '#FF4B4B',
+        'Geschätzter CO₂-Ausstoß Ingolstadt (Jährlich)': '#0083B8'
+    },
+    labels={'CO2 Emissionen (Metrische Tonnen)':'CO₂-Emissionen (Metrische Tonnen)'}
+)
 st.plotly_chart(fig_bar, use_container_width=True)
 
-st.success(f"Die Privatjet-Flüge entsprechen **{ratio_formatted}%** der jährlichen Emissionen von Ingolstadt.")
+st.subheader("Verhältnis")
+st.success(
+    f"Die Gesamt-CO₂-Emissionen der {total_flights} Privatjet-Flüge von Tom Cruise (2024) "
+    f"entsprechen **{ratio_formatted}%** des geschätzten jährlichen CO₂-Ausstoßes von Ingolstadt."
+)
 
 st.markdown("---")
 
-# --- 5. Rohdaten ---
+# --- 6. Datenvorschau ---
 st.header("📋 Rohdaten")
 st.dataframe(data)
+
+# --- ENDE DES STREAMLIT-CODES ---

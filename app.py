@@ -187,48 +187,11 @@ fig.add_trace(go.Scattermapbox(
     name='Flughäfen'
 ))
 
-# --- 4. Interaktive 3D Satelliten-Karte ---
-st.header("📍 3D Satelliten-Flugrouten")
-st.markdown("Karte mit **Satellitenbildern**, Ländergrenzen und Städtenamen. Die Linienstärke ist jetzt dünner.")
+import math # Import math muss am Anfang des Skripts sein
 
-# 1. Daten gruppieren
-route_counts = map_data.groupby(['Abflugort', 'Zielort', 'lat', 'lon', 'Ziel_lat', 'Ziel_lon']).size().reset_index(name='Anzahl_Fluege')
+# ... (Restlicher Code bis Zeile 156 bleibt unverändert)
 
-fig = go.Figure()
-
-# 2. Linien zeichnen (Mapbox Linien sind standardmäßig gerade)
-for index, row in route_counts.iterrows():
-    # NEUE ÄNDERUNG: Linien sind nun dünner (Basis 1, Multiplikator 0.5)
-    line_width = 1 + (row['Anzahl_Fluege'] * 0.5) 
-    
-    hover_text = f"{row['Abflugort']} -> {row['Zielort']}<br>Anzahl Flüge: {row['Anzahl_Fluege']}"
-
-    fig.add_trace(go.Scattermapbox(
-        mode="lines",
-        lon=[row['lon'], row['Ziel_lon']],
-        lat=[row['lat'], row['Ziel_lat']],
-        line=dict(width=line_width, color='red'),
-        hoverinfo='text',
-        text=hover_text,
-        name=f"{row['Anzahl_Fluege']}x Flüge"
-    ))
-
-# 3. Flughäfen als Punkte hinzufügen
-all_lons = list(map_data['lon']) + list(map_data['Ziel_lon'])
-all_lats = list(map_data['lat']) + list(map_data['Ziel_lat'])
-all_texts = list(map_data['Abflugort']) + list(map_data['Zielort'])
-
-fig.add_trace(go.Scattermapbox(
-    mode="markers",
-    lon=all_lons,
-    lat=all_lats,
-    marker=dict(size=8, color='cyan'), # Cyan leuchtet gut auf Satellitenbildern
-    hoverinfo='text',
-    text=all_texts,
-    name='Flughäfen'
-))
-
-# --- 4. Interaktive 3D Satelliten-Karte (FINALE VERSION: Gekrümmt, Farbig, Icons) ---
+# --- 4. Interaktive 3D Satelliten-Karte (FINALE VERSION: Gekrümmt, Farbig, Icons + Legende) ---
 st.header("📍 3D Satelliten-Flugrouten")
 st.markdown("Farbkodierung: **Grün** (selten) ➡ **Rot** (häufig). Flugzeug-Icon in der Mitte der Route zeigt die Richtung an.")
 
@@ -247,10 +210,11 @@ def get_color(value, min_v, max_v):
     g = int(255 * (1 - ratio))
     yellow_factor = 255 * min(ratio, 1 - ratio) * 2
     b = 0
+    # Farbskala RGB(rot, grün, blau)
     return f"rgb({min(255, r + int(yellow_factor/2))}, {min(255, g + int(yellow_factor/2))}, {b})"
 
 
-# Hilfsfunktion für "gekrümmte" Linien (Great Circle Annäherung)
+# Hilfsfunktion für "gekrümmte" Linien (Simulation)
 def create_curved_route(lat1, lon1, lat2, lon2, num_points=50): 
     lats = []
     lons = []
@@ -292,7 +256,7 @@ for index, row in route_counts.iterrows():
     path_lats, path_lons = create_curved_route(start_lat, start_lon, end_lat, end_lon)
     
     # A) Die LINIE zeichnen (dünn & farbig)
-    line_width = 1.5 # Feste dünne Linie
+    line_width = 1.5 
     hover_text = f"{row['Abflugort']} -> {row['Zielort']}<br>Anzahl: {row['Anzahl_Fluege']}"
     fig.add_trace(go.Scattermapbox(
         mode="lines",
@@ -302,6 +266,8 @@ for index, row in route_counts.iterrows():
         hoverinfo='text',
         text=hover_text,
         opacity=0.8,
+        # Füge einen Wert für die Farbskala hinzu (auch wenn sie nicht direkt benutzt wird)
+        marker=dict(color=row['Anzahl_Fluege'], cmin=min_flights, cmax=max_flights),
         showlegend=False
     ))
 
@@ -310,7 +276,7 @@ for index, row in route_counts.iterrows():
     mid_lat = path_lats[mid_index]
     mid_lon = path_lons[mid_index]
     
-    # Winkel berechnen damit das Flugzeug in Flugrichtung zeigt
+    # Winkel berechnen
     bearing = calculate_bearing(start_lat, start_lon, end_lat, end_lon)
 
     fig.add_trace(go.Scattermapbox(
@@ -318,10 +284,10 @@ for index, row in route_counts.iterrows():
         lon=[mid_lon],
         lat=[mid_lat],
         marker=dict(
-            symbol='airport', # Eingebautes Flugzeug-Symbol
-            size=30,
-            color='black',    # <<< HIER AUF SCHWARZ GEÄNDERT >>>
-            angle=bearing     # Drehung in Flugrichtung
+            symbol='airport', 
+            size=20,          
+            color='black',    
+            angle=bearing     
         ),
         hoverinfo='skip',
         showlegend=False
@@ -336,17 +302,41 @@ fig.add_trace(go.Scattermapbox(
     mode="markers",
     lon=all_lons,
     lat=all_lats,
-    marker=dict(size=6, color='#00008B'), # Dunkelblau
+    marker=dict(size=6, color='#00008B'), 
     hoverinfo='text',
     text=all_texts,
-    name='Flughäfen'
+    name='Flughäfen',
+    showlegend=False # Keine Legende für die Punkte
 ))
 
-# 4. Kartenlayout: Satellit + 3D Neigung
+
+# 4. Kartenlayout: Satellit + 3D Neigung und HINZUFÜGEN DER LEGENDE
 fig.update_layout(
     margin={"r":0,"t":0,"l":0,"b":0},
     height=700,
     showlegend=False,
+    # Hinzufügen der Farbskala (Legend) unten rechts
+    coloraxis=dict(
+        colorscale=[[0, 'green'], [0.5, 'yellow'], [0.75, 'orange'], [1, 'red']], # Visueller Farbverlauf
+        colorbar=dict(
+            title='Anzahl Flüge',
+            thicknessmode="pixels",
+            thickness=15,
+            lenmode="fraction",
+            len=0.3, # Länge 30% der Karte
+            x=1, # Position ganz rechts (standardmäßig 1)
+            y=0, # Position ganz unten (standardmäßig 0)
+            xanchor="right",
+            yanchor="bottom",
+            # Anpassung der Ticks für Lesbarkeit
+            tickvals=[min_flights, max_flights * 0.5, max_flights], 
+            ticktext=['Selten (Grün)', 'Mittel', 'Häufig (Rot)'],
+            bgcolor='rgba(255, 255, 255, 0.7)' # Weißer, leicht transparenter Hintergrund
+        ),
+        cmin=min_flights,
+        cmax=max_flights,
+        showscale=True # Legende anzeigen
+    ),
     mapbox=dict(
         style="white-bg", 
         layers=[

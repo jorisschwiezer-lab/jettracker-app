@@ -4,10 +4,9 @@ import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
 import re
-from datetime import datetime
 
 # --- 1. Konfiguration und Daten laden ---
-st.set_page_config(layout="wide", page_title="Tom Cruise Jet Tracker (2024)", page_icon="✈️")
+st.set_page_config(layout="wide", page_title="Privatjet Tracker Tom Cruise", page_icon="✈️")
 
 # Name der CSV-Datei
 CSV_FILE = 'tom_cruise_n350xx_flights.csv'
@@ -15,7 +14,7 @@ CSV_FILE = 'tom_cruise_n350xx_flights.csv'
 # Konstante für den CO2-Vergleich
 CO2_INGOLSTADT_ANNUAL_TONS = 1800000
 
-# Dictionary mit den geokodierten Koordinaten (Dein Original-Dictionary)
+# Dictionary mit den geokodierten Koordinaten
 AIRPORT_COORDINATES = {
     'FXE': (26.197, -80.174), 'VNY': (34.209, -118.490), 'SUA': (27.247, -80.244),
     'CAK': (40.923, -81.442), 'MRY': (36.586, -121.870), 'APF': (26.146, -81.773),
@@ -54,7 +53,8 @@ AIRPORT_COORDINATES = {
     'CUN': (21.036, -86.877), 'VDI': (32.194, -82.371), 'RIL': (39.542, -107.720),
     'DPA': (41.907, -88.248), 'PIR': (44.382, -100.285), 'MBJ': (18.503, -77.913),
     'BOS': (42.365, -71.009), 'POP': (19.757, -70.569), 'TVC': (44.741, -85.582),
-    'MKC': (39.123, -94.593), 'PIT': (40.491, -80.232), 'SPA': (34.916, -81.957)
+    'MKC': (39.123, -94.593), 'PIT': (40.491, -80.232), 'SPA': (34.916, -81.957),
+    'SFO': (37.619, -122.375)
 }
 
 # Funktion zum Extrahieren des Airport-Codes
@@ -73,13 +73,11 @@ def load_data(file_path):
     df.dropna(subset=['Datum'], inplace=True)
     df.sort_values(by='Datum', inplace=True)
 
-    # Bereinigung numerischer Spalten (falls Strings wie "1,500" vorkommen)
     cols_to_clean = ['Distanz (Meilen)', 'Treibstoffverbrauch (Gallons)', 'Emissionen (Metrische Tonnen)']
     for col in cols_to_clean:
         if df[col].dtype == object:
              df[col] = df[col].astype(str).str.replace(',', '').astype(float)
 
-    # Berechne die Flugnummer
     df['Flugnummer'] = np.arange(1, len(df) + 1)
 
     # GEOKODIERUNG
@@ -91,25 +89,15 @@ def load_data(file_path):
     df['Ziel_lat'] = df['Ziel_Code'].apply(lambda x: AIRPORT_COORDINATES.get(x, (None, None))[0])
     df['Ziel_lon'] = df['Ziel_Code'].apply(lambda x: AIRPORT_COORDINATES.get(x, (None, None))[1])
     
-    # Map Dataframe vorbereiten
-    flight_lines = []
-    for index, row in df.iterrows():
-        flight_lines.append({
-            'Flugnummer': row['Flugnummer'], 'Ort': row['Abflugort'],
-            'lat': row['lat'], 'lon': row['lon'], 'Typ': 'Start', 'Datum': row['Datum']
-        })
-        flight_lines.append({
-            'Flugnummer': row['Flugnummer'], 'Ort': row['Zielort'],
-            'lat': row['Ziel_lat'], 'lon': row['Ziel_lon'], 'Typ': 'Ziel', 'Datum': row['Datum']
-        })
-
-    df_map = pd.DataFrame(flight_lines).dropna(subset=['lat', 'lon'])
-    return df, df_map
+    return df
 
 # Daten laden
 try:
-    data, map_data = load_data(CSV_FILE)
+    data = load_data(CSV_FILE)
     total_flights = len(data)
+    # Entferne Zeilen ohne Koordinaten für die Karte
+    map_data = data.dropna(subset=['lat', 'lon', 'Ziel_lat', 'Ziel_lon'])
+    
     if map_data.empty:
          st.error("FEHLER: Keine gültigen Koordinaten gefunden.")
          st.stop()
@@ -117,13 +105,11 @@ try:
 except FileNotFoundError:
     st.error(f"FEHLER: Datei '{CSV_FILE}' nicht gefunden.")
     st.stop()
-except Exception as e:
-    st.error(f"FEHLER: {e}")
-    st.stop()
 
 
 # --- 2. Seitentitel und Bilder ---
-st.title("✈️ Privatjet-Tracker für Bonuspunkte")
+# TITEL GEÄNDERT
+st.title("Privatjet Tracker Tom Cruise")
 
 col_img1, col_text, col_img2 = st.columns([1, 2, 1])
 
@@ -131,7 +117,7 @@ with col_img1:
     st.image("image-w856.jpg.webp", caption="Berühmtheit: Tom Cruise")
 
 with col_text:
-    st.header(f"Analyse der Privatjet-Flüge (2024)")
+    st.header(f"Analyse der Flugbewegungen 2024")
     st.markdown(f"Analysiert **{total_flights}** Flüge von N350XX im Jahr 2024.")
     st.markdown("---")
 
@@ -160,34 +146,69 @@ c4.metric("Ø CO₂ pro Flug", format_de(avg_emissions, 1))
 
 st.markdown("---")
 
-# --- 4. Interaktive Karte (Original mit Slider) ---
-st.header("📍 Flugbahn auf der Karte")
-st.markdown("Nutzen Sie den **Schieberegler**, um die Flugbahn zu verfolgen.")
+# --- 4. Interaktive Karte (Geändert: Gebogen + Dicke nach Häufigkeit) ---
+st.header("📍 Flugrouten (Häufigkeit & Erdkrümmung)")
+st.markdown("Die **Dicke der Linien** repräsentiert die Häufigkeit der geflogenen Route. Die Linien folgen der **Erdkrümmung**.")
 
-max_flight = int(data['Flugnummer'].max())
-flight_slider = st.slider('Flüge bis zur Nummer:', 1, max_flight, max_flight)
+# 1. Daten gruppieren, um Häufigkeit pro Route zu zählen
+# Wir gruppieren nach Start- und Zielkoordinaten sowie den Ortsnamen
+route_counts = map_data.groupby(['Abflugort', 'Zielort', 'lat', 'lon', 'Ziel_lat', 'Ziel_lon']).size().reset_index(name='Anzahl_Fluege')
 
-filtered_map_data = map_data[map_data['Flugnummer'] <= flight_slider]
 fig = go.Figure()
 
-for flight_num in filtered_map_data['Flugnummer'].unique():
-    segment = filtered_map_data[filtered_map_data['Flugnummer'] == flight_num]
-    if len(segment) >= 2:
-        fig.add_trace(go.Scattermapbox(
-            mode="lines", lon=segment['lon'], lat=segment['lat'],
-            name=f"Flug {flight_num}", line=dict(width=2, color='red'),
-            hoverinfo='text', text=f"Flug {flight_num}"
-        ))
+# 2. Linien zeichnen
+for index, row in route_counts.iterrows():
+    # Berechnung der Linienbreite: Basis 1 + (Anzahl * Faktor)
+    # Beispiel: 1 Flug = Breite 1.5, 10 Flüge = Breite 6
+    line_width = 1 + (row['Anzahl_Fluege'] * 0.8)
+    
+    # Hover-Text erstellen
+    hover_text = f"{row['Abflugort']} -> {row['Zielort']}<br>Anzahl Flüge: {row['Anzahl_Fluege']}"
 
-fig.add_trace(go.Scattermapbox(
-    mode="markers", lon=filtered_map_data['lon'], lat=filtered_map_data['lat'],
-    marker={'size': 8, 'color': 'blue'}, name='Flughäfen', hoverinfo='text', text=filtered_map_data['Ort']
+    fig.add_trace(go.Scattergeo(
+        locationmode='USA-states',
+        lon=[row['lon'], row['Ziel_lon']],
+        lat=[row['lat'], row['Ziel_lat']],
+        mode='lines',
+        line=dict(width=line_width, color='red'),
+        opacity=0.7,
+        hoverinfo='text',
+        text=hover_text,
+        name=f"{row['Anzahl_Fluege']}x Flüge"
+    ))
+
+# 3. Flughafen-Punkte hinzufügen (Einmalig alle Orte sammeln)
+all_lons = list(map_data['lon']) + list(map_data['Ziel_lon'])
+all_lats = list(map_data['lat']) + list(map_data['Ziel_lat'])
+all_texts = list(map_data['Abflugort']) + list(map_data['Zielort'])
+
+fig.add_trace(go.Scattergeo(
+    lon=all_lons,
+    lat=all_lats,
+    hoverinfo='text',
+    text=all_texts,
+    mode='markers',
+    marker=dict(size=5, color='blue', symbol='circle'),
+    name='Flughäfen'
 ))
 
+# 4. Kartenlayout anpassen
 fig.update_layout(
-    mapbox_style="open-street-map", margin={"r":0,"t":0,"l":0,"b":0},
-    mapbox=dict(center=dict(lat=39, lon=-98), zoom=3)
+    showlegend=False,
+    geo=dict(
+        scope='world', # Zeigt die ganze Welt
+        projection_type='equirectangular', # Flache Karte, aber Linien werden als Great Circles (gebogen) berechnet
+        showland=True,
+        landcolor='rgb(243, 243, 243)',
+        countrycolor='rgb(204, 204, 204)',
+        coastlinecolor='rgb(204, 204, 204)',
+        showocean=True,
+        oceancolor='rgb(230, 245, 255)',
+    ),
+    height=600,
+    margin={"r":0,"t":0,"l":0,"b":0}
 )
+
 st.plotly_chart(fig, use_container_width=True)
 
 st.markdown("---")
@@ -208,17 +229,15 @@ st.plotly_chart(fig_bar, use_container_width=True)
 st.success(f"Die Emissionen entsprechen **{format_de(ratio, 4)}%** des Ausstoßes von Ingolstadt.")
 st.markdown("---")
 
-# --- 6. NEU: DETAILLIERTE DIAGRAMME (Top 5 & Monate) ---
+# --- 6. Detaillierte Statistiken (Säulendiagramme) ---
 st.header("📈 Detaillierte Statistiken")
 col_chart1, col_chart2 = st.columns(2)
 
 with col_chart1:
     st.subheader("Emissionen pro Monat")
-    # Monat aus Datum extrahieren
     data['Monat_Str'] = data['Datum'].dt.strftime('%Y-%m')
     monthly_stats = data.groupby('Monat_Str')['Emissionen (Metrische Tonnen)'].sum().reset_index()
     
-    # Säulendiagramm erstellen
     fig_month = px.bar(
         monthly_stats, 
         x='Monat_Str', 
@@ -231,28 +250,20 @@ with col_chart1:
 
 with col_chart2:
     st.subheader("Top 5 Zielorte")
-    # Top 5 Ziele ermitteln
     top_dest = data['Zielort'].value_counts().head(5).reset_index()
     top_dest.columns = ['Ort', 'Anzahl']
-    # Namen für das Diagramm kürzen
     top_dest['Label'] = top_dest['Ort'].apply(lambda x: x.split('(')[0][:20] + "..." if len(x) > 20 else x)
     
-    # Balkendiagramm (horizontal) für bessere Lesbarkeit der Namen
     fig_top5 = px.bar(
         top_dest,
         x='Anzahl',
         y='Label',
-        orientation='h', # Horizontal
+        orientation='h', 
         labels={'Label': 'Flughafen', 'Anzahl': 'Anzahl Landungen'},
         color='Anzahl',
         color_continuous_scale='Blues'
     )
-    # Umgekehrte Reihenfolge (damit der größte oben ist)
     fig_top5.update_layout(yaxis={'categoryorder':'total ascending'})
     st.plotly_chart(fig_top5, use_container_width=True)
 
-st.markdown("---")
-
-# --- 7. Datenvorschau ---
-st.header("📋 Rohdaten")
-st.dataframe(data)
+# --- ENDE --- (Keine Rohdaten mehr am Ende)

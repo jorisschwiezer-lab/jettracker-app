@@ -4,7 +4,6 @@ import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
 import re
-import math # Neu für die Winkelberechnung des Flugzeugs
 
 # --- 1. Konfiguration und Daten laden ---
 st.set_page_config(layout="wide", page_title="Privatjet Tracker Tom Cruise", page_icon="✈️")
@@ -77,7 +76,7 @@ def load_data(file_path):
     cols_to_clean = ['Distanz (Meilen)', 'Treibstoffverbrauch (Gallons)', 'Emissionen (Metrische Tonnen)']
     for col in cols_to_clean:
         if df[col].dtype == object:
-            df[col] = df[col].astype(str).str.replace(',', '').astype(float)
+             df[col] = df[col].astype(str).str.replace(',', '').astype(float)
 
     df['Flugnummer'] = np.arange(1, len(df) + 1)
 
@@ -94,18 +93,18 @@ def load_data(file_path):
 
 # Daten laden
 try:
-    data = load_data(CSV_FILE)
-    total_flights = len(data)
-    # Entferne Zeilen ohne Koordinaten für die Karte
-    map_data = data.dropna(subset=['lat', 'lon', 'Ziel_lat', 'Ziel_lon'])
-    
-    if map_data.empty:
-         st.error("FEHLER: Keine gültigen Koordinaten gefunden.")
-         st.stop()
-    st.success(f"Daten erfolgreich geladen. {total_flights} Flüge aus 2024.")
+    data = load_data(CSV_FILE)
+    total_flights = len(data)
+    # Entferne Zeilen ohne Koordinaten für die Karte
+    map_data = data.dropna(subset=['lat', 'lon', 'Ziel_lat', 'Ziel_lon'])
+    
+    if map_data.empty:
+         st.error("FEHLER: Keine gültigen Koordinaten gefunden.")
+         st.stop()
+    st.success(f"Daten erfolgreich geladen. {total_flights} Flüge aus 2024.")
 except FileNotFoundError:
-    st.error(f"FEHLER: Datei '{CSV_FILE}' nicht gefunden.")
-    st.stop()
+    st.error(f"FEHLER: Datei '{CSV_FILE}' nicht gefunden.")
+    st.stop()
 
 
 # --- 2. Seitentitel und Bilder ---
@@ -114,15 +113,15 @@ st.title("Privatjet Tracker Tom Cruise")
 col_img1, col_text, col_img2 = st.columns([1, 2, 1])
 
 with col_img1:
-    st.image("image-w856.jpg.webp", caption="Berühmtheit: Tom Cruise")
+    st.image("image-w856.jpg.webp", caption="Berühmtheit: Tom Cruise")
 
 with col_text:
-    st.header(f"Analyse der Flugbewegungen 2024")
-    st.markdown(f"Analysiert **{total_flights}** Flüge von N350XX im Jahr 2024.")
-    st.markdown("---")
+    st.header(f"Analyse der Flugbewegungen 2024")
+    st.markdown(f"Analysiert **{total_flights}** Flüge von N350XX im Jahr 2024.")
+    st.markdown("---")
 
 with col_img2:
-    st.image("Bild 2.jpeg", caption="Flugzeugtyp: Bombardier Challenger 350")
+    st.image("Bild 2.jpeg", caption="Flugzeugtyp: Bombardier Challenger 350")
 
 st.markdown("---")
 
@@ -136,7 +135,7 @@ total_emissions = data['Emissionen (Metrische Tonnen)'].sum()
 avg_emissions = data['Emissionen (Metrische Tonnen)'].mean()
 
 def format_de(number, decimals=0):
-    return f"{number:,.{decimals}f}".replace(",", "|").replace(".", ",").replace("|", ".")
+    return f"{number:,.{decimals}f}".replace(",", "|").replace(".", ",").replace("|", ".")
 
 c1, c2, c3, c4 = st.columns(4)
 c1.metric("Anzahl Flüge", total_flights)
@@ -146,109 +145,33 @@ c4.metric("Ø CO₂ pro Flug", format_de(avg_emissions, 1))
 
 st.markdown("---")
 
-
-# --- 4. Interaktive 3D Satelliten-Karte (Überarbeitet) ---
+# --- 4. Interaktive 3D Satelliten-Karte ---
 st.header("📍 3D Satelliten-Flugrouten")
-st.markdown("Farbkodierung: **Grün** (selten) ➡ **Rot** (häufig). Flugzeug-Icon in der Mitte der Route.")
+st.markdown("Karte mit **Satellitenbildern**, Ländergrenzen und Städtenamen. Die Dicke der Linien zeigt die Häufigkeit.")
 
 # 1. Daten gruppieren
 route_counts = map_data.groupby(['Abflugort', 'Zielort', 'lat', 'lon', 'Ziel_lat', 'Ziel_lon']).size().reset_index(name='Anzahl_Fluege')
 
-# Maximalwert für die Farberechnung finden
-max_flights = route_counts['Anzahl_Fluege'].max()
-min_flights = route_counts['Anzahl_Fluege'].min()
-
-# Hilfsfunktion für Farben (Grün -> Gelb -> Rot)
-def get_color(value, min_v, max_v):
-    if max_v == min_v: return "rgb(0, 255, 0)" # Fallback falls nur 1 Flug
-    ratio = (value - min_v) / (max_v - min_v)
-    # Rote und Grüne Komponente
-    r = int(255 * ratio)
-    g = int(255 * (1 - ratio))
-    # Optionale Gelb/Orange Komponente für die Mitte (für einen besseren Verlauf)
-    yellow_factor = 255 * min(ratio, 1 - ratio) * 2 # Maximum bei ratio=0.5
-    b = 0
-    return f"rgb({min(255, r + int(yellow_factor/2))}, {min(255, g + int(yellow_factor/2))}, {b})"
-
-
-# Hilfsfunktion für "gekrümmte" Linien (Great Circle Annäherung)
-def create_curved_route(lat1, lon1, lat2, lon2, num_points=20):
-    lats = []
-    lons = []
-    for i in range(num_points + 1):
-        f = i / num_points
-        # Einfache Lineare Interpolation (Wirkt auf Mapbox oft schon leicht gekrümmt)
-        lats.append(lat1 + (lat2 - lat1) * f)
-        lons.append(lon1 + (lon2 - lon1) * f)
-    return lats, lons
-
-# Hilfsfunktion für Flugzeug-Winkel (Bearing)
-def calculate_bearing(lat1, lon1, lat2, lon2):
-    # Konvertierung zu Radianten
-    lat1_rad, lon1_rad = math.radians(lat1), math.radians(lon1)
-    lat2_rad, lon2_rad = math.radians(lat2), math.radians(lon2)
-
-    dLon = (lon2_rad - lon1_rad)
-    
-    y = math.sin(dLon) * math.cos(lat2_rad)
-    x = math.cos(lat1_rad) * math.sin(lat2_rad) - \
-        math.sin(lat1_rad) * math.cos(lat2_rad) * math.cos(dLon)
-        
-    brng = math.atan2(y, x)
-    brng = math.degrees(brng)
-    # Drehung auf 0-360 Grad
-    return (brng + 360) % 360
-
 fig = go.Figure()
 
-# 2. Linien und Flugzeuge zeichnen
+# 2. Linien zeichnen (Mapbox Linien sind standardmäßig gerade)
 for index, row in route_counts.iterrows():
-    # Farbe bestimmen
-    line_color = get_color(row['Anzahl_Fluege'], min_flights, max_flights)
+    # HIER WURDE GEÄNDERT: Aggressivere Formel für die Dicke (Start bei 3, Faktor 3)
+    line_width = 3 + (row['Anzahl_Fluege'] * 3) 
     
-    # Koordinaten
-    start_lat, start_lon = row['lat'], row['lon']
-    end_lat, end_lon = row['Ziel_lat'], row['Ziel_lon']
-    
-    # Kurve berechnen (Simuliert)
-    path_lats, path_lons = create_curved_route(start_lat, start_lon, end_lat, end_lon)
-    
-    # A) Die LINIE zeichnen (dünn & farbig)
-    hover_text = f"{row['Abflugort']} -> {row['Zielort']}<br>Anzahl: {row['Anzahl_Fluege']}"
+    hover_text = f"{row['Abflugort']} -> {row['Zielort']}<br>Anzahl Flüge: {row['Anzahl_Fluege']}"
+
     fig.add_trace(go.Scattermapbox(
         mode="lines",
-        lon=path_lons,
-        lat=path_lats,
-        line=dict(width=1.5, color=line_color), # Dünnere Linie wie gewünscht
+        lon=[row['lon'], row['Ziel_lon']],
+        lat=[row['lat'], row['Ziel_lat']],
+        line=dict(width=line_width, color='red'),
         hoverinfo='text',
         text=hover_text,
-        opacity=0.8,
-        showlegend=False
+        name=f"{row['Anzahl_Fluege']}x Flüge"
     ))
 
-    # B) Das FLUGZEUG in der Mitte zeichnen
-    mid_index = len(path_lats) // 2
-    mid_lat = path_lats[mid_index]
-    mid_lon = path_lons[mid_index]
-    
-    # Winkel berechnen damit das Flugzeug in Flugrichtung zeigt
-    bearing = calculate_bearing(start_lat, start_lon, end_lat, end_lon)
-
-    fig.add_trace(go.Scattermapbox(
-        mode="markers",
-        lon=[mid_lon],
-        lat=[mid_lat],
-        marker=dict(
-            symbol='airport', # Eingebautes Flugzeug-Symbol (sieht aus wie dein Bild)
-            size=12,
-            color='white',    # Weiß hebt sich gut auf Satellitenbild ab
-            angle=bearing     # Drehung in Flugrichtung
-        ),
-        hoverinfo='skip',
-        showlegend=False
-    ))
-
-# 3. Flughäfen als Punkte hinzufügen (Dunkelblau)
+# 3. Flughäfen als Punkte hinzufügen
 all_lons = list(map_data['lon']) + list(map_data['Ziel_lon'])
 all_lats = list(map_data['lat']) + list(map_data['Ziel_lat'])
 all_texts = list(map_data['Abflugort']) + list(map_data['Zielort'])
@@ -257,7 +180,7 @@ fig.add_trace(go.Scattermapbox(
     mode="markers",
     lon=all_lons,
     lat=all_lats,
-    marker=dict(size=6, color='#00008B'), # Dunkelblau
+    marker=dict(size=8, color='cyan'), # Cyan leuchtet gut auf Satellitenbildern
     hoverinfo='text',
     text=all_texts,
     name='Flughäfen'
@@ -269,9 +192,11 @@ fig.update_layout(
     height=700,
     showlegend=False,
     mapbox=dict(
-        style="white-bg", 
+        # Wir nutzen 'white-bg' als Basis und legen ESRI-Satellitenbilder darüber (Kostenlos!)
+        style="white-bg",
         layers=[
             {
+                # Layer 1: Satellitenbilder (World Imagery)
                 "below": 'traces',
                 "sourcetype": "raster",
                 "source": [
@@ -279,6 +204,7 @@ fig.update_layout(
                 ]
             },
             {
+                # Layer 2: Grenzen, Straßen und Städtenamen (Reference Overlay)
                 "below": 'traces',
                 "sourcetype": "raster",
                 "source": [
@@ -286,9 +212,9 @@ fig.update_layout(
                 ]
             }
         ],
-        center=dict(lat=30, lon=-80), 
+        center=dict(lat=30, lon=-80), # Startet über USA/Karibik (Hauptfluggebiet)
         zoom=3.5,
-        pitch=45, 
+        pitch=45, # Neigung für 3D-Effekt
         bearing=0
     )
 )
@@ -303,12 +229,12 @@ st.header("⚖️ Vergleich mit Ingolstadt")
 
 ratio = (total_emissions / CO2_INGOLSTADT_ANNUAL_TONS) * 100
 comparison_df = pd.DataFrame({
-    'Quelle': ['Tom Cruise (2024)', 'Ingolstadt (Jahr)'],
-    'CO2': [total_emissions, CO2_INGOLSTADT_ANNUAL_TONS]
+    'Quelle': ['Tom Cruise (2024)', 'Ingolstadt (Jahr)'],
+    'CO2': [total_emissions, CO2_INGOLSTADT_ANNUAL_TONS]
 })
 
 fig_bar = px.bar(comparison_df, x='Quelle', y='CO2', color='Quelle',
-                 color_discrete_map={'Tom Cruise (2024)': '#FF4B4B', 'Ingolstadt (Jahr)': '#0083B8'})
+                 color_discrete_map={'Tom Cruise (2024)': '#FF4B4B', 'Ingolstadt (Jahr)': '#0083B8'})
 st.plotly_chart(fig_bar, use_container_width=True)
 
 st.success(f"Die Emissionen entsprechen **{format_de(ratio, 4)}%** des Ausstoßes von Ingolstadt.")
@@ -319,34 +245,34 @@ st.header("📈 Detaillierte Statistiken")
 col_chart1, col_chart2 = st.columns(2)
 
 with col_chart1:
-    st.subheader("Emissionen pro Monat")
-    data['Monat_Str'] = data['Datum'].dt.strftime('%Y-%m')
-    monthly_stats = data.groupby('Monat_Str')['Emissionen (Metrische Tonnen)'].sum().reset_index()
-    
-    fig_month = px.bar(
-        monthly_stats, 
-        x='Monat_Str', 
-        y='Emissionen (Metrische Tonnen)',
-        labels={'Monat_Str': 'Monat', 'Emissionen (Metrische Tonnen)': 'CO₂ (Tonnen)'},
-        color='Emissionen (Metrische Tonnen)',
-        color_continuous_scale='Reds'
-    )
-    st.plotly_chart(fig_month, use_container_width=True)
+    st.subheader("Emissionen pro Monat")
+    data['Monat_Str'] = data['Datum'].dt.strftime('%Y-%m')
+    monthly_stats = data.groupby('Monat_Str')['Emissionen (Metrische Tonnen)'].sum().reset_index()
+    
+    fig_month = px.bar(
+        monthly_stats, 
+        x='Monat_Str', 
+        y='Emissionen (Metrische Tonnen)',
+        labels={'Monat_Str': 'Monat', 'Emissionen (Metrische Tonnen)': 'CO₂ (Tonnen)'},
+        color='Emissionen (Metrische Tonnen)',
+        color_continuous_scale='Reds'
+    )
+    st.plotly_chart(fig_month, use_container_width=True)
 
 with col_chart2:
-    st.subheader("Top 5 Zielorte")
-    top_dest = data['Zielort'].value_counts().head(5).reset_index()
-    top_dest.columns = ['Ort', 'Anzahl']
-    top_dest['Label'] = top_dest['Ort'].apply(lambda x: x.split('(')[0][:20] + "..." if len(x) > 20 else x)
-    
-    fig_top5 = px.bar(
-        top_dest,
-        x='Anzahl',
-        y='Label',
-        orientation='h', 
-        labels={'Label': 'Flughafen', 'Anzahl': 'Anzahl Landungen'},
-        color='Anzahl',
-        color_continuous_scale='Blues'
-    )
-    fig_top5.update_layout(yaxis={'categoryorder':'total ascending'})
-    st.plotly_chart(fig_top5, use_container_width=True)
+    st.subheader("Top 5 Zielorte")
+    top_dest = data['Zielort'].value_counts().head(5).reset_index()
+    top_dest.columns = ['Ort', 'Anzahl']
+    top_dest['Label'] = top_dest['Ort'].apply(lambda x: x.split('(')[0][:20] + "..." if len(x) > 20 else x)
+    
+    fig_top5 = px.bar(
+        top_dest,
+        x='Anzahl',
+        y='Label',
+        orientation='h', 
+        labels={'Label': 'Flughafen', 'Anzahl': 'Anzahl Landungen'},
+        color='Anzahl',
+        color_continuous_scale='Blues'
+    )
+    fig_top5.update_layout(yaxis={'categoryorder':'total ascending'})
+    st.plotly_chart(fig_top5, use_container_width=True)

@@ -382,26 +382,72 @@ with col_chart2:
     fig_top5.update_layout(yaxis={'categoryorder':'total ascending'})
     st.plotly_chart(fig_top5, use_container_width=True)
 
+# ... (Code für die Detaillierten Statistiken endet hier)
 
-# --- 7. CO2-Kompensation (Baumvergleich) ---
+
+# --- 7. CO2-Kompensation (Interaktiver Baumvergleich) ---
 st.markdown("---")
-st.header("🌳 CO₂-Kompensation (Baumvergleich)") # Überschrift angepasst
+st.header("🌳 Interaktive CO₂-Kompensation")
 
-# Berechnung der benötigten Bäume
-required_trees = total_emissions / CO2_PER_TREE_TONS_ANNUALLY
-required_trees_formatted = format_de(required_trees, 0)
-total_emissions_formatted = format_de(total_emissions, 2)
+# Gesamtwerte (zur statischen Anzeige im Text)
+max_emissions = total_emissions
+max_trees = max_emissions / CO2_PER_TREE_TONS_ANNUALLY
+
+
+# --- INTERAKTIVER SLIDER ---
+st.subheader("Simuliere die Auswirkungen")
+
+# Slider, der die Anzahl der Flüge von 1 bis zur Gesamtzahl steuert
+flights_to_analyze = st.slider(
+    'Anzahl der Flüge, die simuliert werden sollen:',
+    min_value=1, 
+    max_value=total_flights,
+    value=total_flights, # Startwert ist die gesamte Anzahl
+    step=1
+)
+
+# Berechnung der CO2-Emissionen und Bäume basierend auf dem Slider-Wert
+# Wir nehmen an, jeder Flug hat den Durchschnitts-CO2-Wert (avg_emissions = 7.9 Tonnen)
+current_emissions = flights_to_analyze * avg_emissions
+current_trees = current_emissions / CO2_PER_TREE_TONS_ANNUALLY
+
+current_emissions_formatted = format_de(current_emissions, 2)
+current_trees_formatted = format_de(current_trees, 0)
+
+
+# --- Visuelle Darstellung ---
+
+# 1. Berechnung der visuellen Baumgröße (skaliert von 100% auf max_flights)
+# Der Baum soll bei 1 Flug klein sein und bei max_flights die volle Größe erreichen.
+min_font_size = 20  # Kleinste Größe in Pixeln (für 1 Flug)
+max_font_size = 80  # Größte Größe in Pixeln (für max_flights)
+# Linear skalieren: (aktueller Wert / Maximalwert) * (Max Größe - Min Größe) + Min Größe
+if total_flights > 1:
+    tree_scale = (flights_to_analyze / total_flights)
+else:
+    tree_scale = 1 # Falls nur ein Flug vorhanden
+
+# Schriftgröße berechnen
+font_size_px = int(min_font_size + (max_font_size - min_font_size) * tree_scale)
+
 
 col_tree_icon, col_tree_text = st.columns([1, 4])
 
 with col_tree_icon:
-    # Baumsymbol auf LAUBBAUM geändert
-    st.markdown("## 🌳") 
-    st.markdown(f"**{required_trees_formatted}**")
-    
+    # Baumsymbol (Laubbaum) mit dynamischer Größe über HTML/CSS
+    # Nutzt ungesicherten HTML-Code (unsafe_allow_html=True) zur Größenkontrolle des Emojis
+    st.markdown(f"<p style='font-size: {font_size_px}px;'>🌳</p>", unsafe_allow_html=True)
+    st.markdown(f"**{current_trees_formatted}**")
+
 with col_tree_text:
     st.markdown(f"""
-    Um die durch Tom Cruises Privatjet verursachten Emissionen von **{total_emissions_formatted} Tonnen CO₂**
-    im Laufe eines Jahres auszugleichen, müssten **{required_trees_formatted} Bäume** neu gepflanzt werden.
+    Bei **{flights_to_analyze} Flügen** entstehen Emissionen von **{current_emissions_formatted} Tonnen CO₂**.
+    
+    Um diese Emissionen im Laufe eines Jahres auszugleichen, müssten **{current_trees_formatted} Bäume** neu gepflanzt werden.
+    
     *(Basierend auf einem Durchschnittswert von 0.022 Tonnen CO₂-Aufnahme pro Baum und Jahr)*
-    """) # <<< KORREKTUR: LaTeX-Syntax wurde entfernt >>>
+    """)
+
+# --- OPTIONALE HINWEISZEILE FÜR DEN MAXIMALWERT ---
+if flights_to_analyze < total_flights:
+    st.info(f"Der Gesamt-Fußabdruck (bei {total_flights} Flügen) beträgt {format_de(max_emissions, 2)} Tonnen CO₂ und erfordert {format_de(max_trees, 0)} Bäume.")

@@ -15,7 +15,7 @@ CSV_FILE = 'tom_cruise_n350xx_flights.csv'
 # Konstante für den CO2-Vergleich
 CO2_INGOLSTADT_ANNUAL_TONS = 1800000
 
-# WICHTIG: KONSTANTE HIER NEU DEFINIERT, UM NAMEERROR ZU VERMEIDEN
+# WICHTIG: KONSTANTE FÜR BAUMVERGLEICH
 CO2_PER_TREE_TONS_ANNUALLY = 0.022 # 22 kg CO2 pro Baum und Jahr (Durchschnittswert)
 
 
@@ -137,7 +137,7 @@ st.header("📊 Statistische Kennzahlen")
 total_distance = data['Distanz (Meilen)'].sum()
 total_fuel = data['Treibstoffverbrauch (Gallons)'].sum()
 
-# >>> KORRIGIERTE BASISDATEN HIER EINGEFÜGT (1787 Tonnen CO2) <<<
+# >>> KORRIGIERTE BASISDATEN: 1787 Tonnen CO2 und 226 Flüge (7.9t/Flug) <<<
 total_emissions = 1787.0
 avg_emissions = total_emissions / total_flights 
 # -----------------------------------------------------------------
@@ -299,6 +299,7 @@ fig.update_layout(
         bearing=0
     )
 )
+
 st.plotly_chart(fig, use_container_width=True)
 st.caption("Hinweis: Nutze die rechte Maustaste (oder Strg + Klick), um die 3D-Ansicht zu drehen und zu kippen.")
 
@@ -322,27 +323,25 @@ with st.container():
 st.markdown("---")
 
 
-# --- 5. CO2-Kompensation (Interaktiver Baumvergleich) (VERSCHOBEN) ---
-st.header("🌳 CO₂-Kompensation (Interaktiv)") # Prominentere Überschrift
+# --- 5. CO2-Kompensation (Interaktiver Baumvergleich) ---
+st.header("🌳 CO₂-Kompensation (Privatjet)") 
 
-# Gesamtwerte (zur statischen Anzeige im Text)
+# Gesamtwerte
 max_emissions = total_emissions
 max_trees = max_emissions / CO2_PER_TREE_TONS_ANNUALLY
 
 
 # --- INTERAKTIVER SLIDER ---
-st.subheader("Simuliere die benötigten Bäume in Abhängigkeit der Flüge")
+st.subheader("Simuliere die benötigten Bäume in Abhängigkeit der Flüge (Privatjet)")
 
-# Slider, der die Anzahl der Flüge von 1 bis zur Gesamtzahl steuert
 flights_to_analyze = st.slider(
     'Anzahl der Flüge, die simuliert werden sollen:',
     min_value=1, 
     max_value=total_flights,
-    value=total_flights, # Startwert ist die gesamte Anzahl
+    value=total_flights, 
     step=1
 )
 
-# Berechnung der CO2-Emissionen und Bäume basierend auf dem Slider-Wert
 current_emissions = flights_to_analyze * avg_emissions
 current_trees = current_emissions / CO2_PER_TREE_TONS_ANNUALLY
 
@@ -351,16 +350,13 @@ current_trees_formatted = format_de(current_trees, 0)
 
 
 # --- Visuelle Darstellung ---
-
-# 1. Berechnung der visuellen Baumgröße (skaliert)
-min_font_size = 30  # Kleinste Größe in Pixeln (etwas größer gemacht)
-max_font_size = 100 # Größte Größe in Pixeln (prominenter gemacht)
+min_font_size = 35 
+max_font_size = 110 
 if total_flights > 1:
     tree_scale = (flights_to_analyze / total_flights)
 else:
     tree_scale = 1 
 
-# Schriftgröße berechnen
 font_size_px = int(min_font_size + (max_font_size - min_font_size) * tree_scale)
 
 
@@ -368,12 +364,21 @@ col_tree_icon, col_tree_text = st.columns([1, 4])
 
 with col_tree_icon:
     # Baumsymbol (Laubbaum) mit dynamischer Größe über HTML/CSS
-    st.markdown(f"<p style='font-size: {font_size_px}px; line-height: 1;'>🌳</p>", unsafe_allow_html=True)
-    st.markdown(f"**{current_trees_formatted}**", unsafe_allow_html=True)
+    st.markdown(
+        f"""
+        <div style="
+            text-align: center; 
+            margin-top: 10px; 
+            margin-bottom: 10px;">
+            <span style='font-size: {font_size_px}px;'>🌳</span>
+        </div>
+        """, 
+        unsafe_allow_html=True
+    )
 
 with col_tree_text:
     st.markdown(f"""
-    Bei **{flights_to_analyze} Flügen** entstehen Emissionen von **{current_emissions_formatted} Tonnen CO₂**.
+    Bei **{flights_to_analyze} Privatjet-Flügen** entstehen Emissionen von **{current_emissions_formatted} Tonnen CO₂**.
     
     Um diese Emissionen im Laufe eines Jahres auszugleichen, müssten **{current_trees_formatted} Bäume** neu gepflanzt werden.
     
@@ -403,7 +408,6 @@ Tom Cruises anteilige CO₂-Emissionen nur **{format_de(COMMERCIAL_FACTOR * 100,
 
 # --- INTERAKTIVER SLIDER (Kommerziell) ---
 
-# Der Slider steuert weiterhin die gleiche Anzahl an Flügen
 flights_to_analyze_comm = st.slider(
     'Anzahl der Flüge, die kommerziell simuliert werden sollen:',
     min_value=1, 
@@ -413,7 +417,6 @@ flights_to_analyze_comm = st.slider(
     key='commercial_slider' # Eindeutige ID für Streamlit-Slider
 )
 
-# Berechnung der CO2-Emissionen und Bäume basierend auf dem Slider-Wert (Kommerziell)
 current_emissions_comm = flights_to_analyze_comm * commercial_avg_emissions
 current_trees_comm = current_emissions_comm / CO2_PER_TREE_TONS_ANNUALLY
 
@@ -421,8 +424,8 @@ current_emissions_formatted_comm = format_de(current_emissions_comm, 2)
 current_trees_formatted_comm = format_de(current_trees_comm, 0)
 
 # 1. Berechnung der visuellen Baumgröße (skaliert)
-min_font_size_comm = 30  
-max_font_size_comm = 100 
+min_font_size_comm = 35  
+max_font_size_comm = 110 
 if total_flights > 1:
     tree_scale_comm = (flights_to_analyze_comm / total_flights)
 else:
@@ -433,9 +436,18 @@ font_size_px_comm = int(min_font_size_comm + (max_font_size_comm - min_font_size
 col_comm_icon, col_comm_text = st.columns([1, 4])
 
 with col_comm_icon:
-    # Symbol ist nun der LAUBBAUM und skaliert
-    st.markdown(f"<p style='font-size: {font_size_px_comm}px; line-height: 1;'>🌳</p>", unsafe_allow_html=True) 
-    st.markdown(f"**{current_trees_formatted_comm}**", unsafe_allow_html=True)
+    # Baumsymbol (Laubbaum) mit dynamischer Größe
+    st.markdown(
+        f"""
+        <div style="
+            text-align: center; 
+            margin-top: 10px; 
+            margin-bottom: 10px;">
+            <span style='font-size: {font_size_px_comm}px;'>🌳</span>
+        </div>
+        """, 
+        unsafe_allow_html=True
+    ) 
 
 with col_comm_text:
     st.markdown(f"""

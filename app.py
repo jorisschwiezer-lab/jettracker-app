@@ -108,7 +108,6 @@ except FileNotFoundError:
 
 
 # --- 2. Seitentitel und Bilder ---
-# TITEL GEÄNDERT
 st.title("Privatjet Tracker Tom Cruise")
 
 col_img1, col_text, col_img2 = st.columns([1, 2, 1])
@@ -146,70 +145,81 @@ c4.metric("Ø CO₂ pro Flug", format_de(avg_emissions, 1))
 
 st.markdown("---")
 
-# --- 4. Interaktive Karte (Geändert: Gebogen + Dicke nach Häufigkeit) ---
-st.header("📍 Flugrouten (Häufigkeit & Erdkrümmung)")
-st.markdown("Die **Dicke der Linien** repräsentiert die Häufigkeit der geflogenen Route. Die Linien folgen der **Erdkrümmung**.")
+# --- 4. Interaktive 3D Satelliten-Karte ---
+st.header("📍 3D Satelliten-Flugrouten")
+st.markdown("Karte mit **Satellitenbildern**, Ländergrenzen und Städtenamen. Die Dicke der Linien zeigt die Häufigkeit.")
 
-# 1. Daten gruppieren, um Häufigkeit pro Route zu zählen
-# Wir gruppieren nach Start- und Zielkoordinaten sowie den Ortsnamen
+# 1. Daten gruppieren
 route_counts = map_data.groupby(['Abflugort', 'Zielort', 'lat', 'lon', 'Ziel_lat', 'Ziel_lon']).size().reset_index(name='Anzahl_Fluege')
 
 fig = go.Figure()
 
-# 2. Linien zeichnen
+# 2. Linien zeichnen (Mapbox Linien sind standardmäßig gerade)
 for index, row in route_counts.iterrows():
-    # Berechnung der Linienbreite: Basis 1 + (Anzahl * Faktor)
-    # Beispiel: 1 Flug = Breite 1.5, 10 Flüge = Breite 6
-    line_width = 1 + (row['Anzahl_Fluege'] * 0.8)
+    line_width = 2 + (row['Anzahl_Fluege'] * 1.5) # Breitere Linien für bessere Sichtbarkeit auf Satellit
     
-    # Hover-Text erstellen
     hover_text = f"{row['Abflugort']} -> {row['Zielort']}<br>Anzahl Flüge: {row['Anzahl_Fluege']}"
 
-    fig.add_trace(go.Scattergeo(
-        locationmode='USA-states',
+    fig.add_trace(go.Scattermapbox(
+        mode="lines",
         lon=[row['lon'], row['Ziel_lon']],
         lat=[row['lat'], row['Ziel_lat']],
-        mode='lines',
         line=dict(width=line_width, color='red'),
-        opacity=0.7,
         hoverinfo='text',
         text=hover_text,
         name=f"{row['Anzahl_Fluege']}x Flüge"
     ))
 
-# 3. Flughafen-Punkte hinzufügen (Einmalig alle Orte sammeln)
+# 3. Flughäfen als Punkte hinzufügen
 all_lons = list(map_data['lon']) + list(map_data['Ziel_lon'])
 all_lats = list(map_data['lat']) + list(map_data['Ziel_lat'])
 all_texts = list(map_data['Abflugort']) + list(map_data['Zielort'])
 
-fig.add_trace(go.Scattergeo(
+fig.add_trace(go.Scattermapbox(
+    mode="markers",
     lon=all_lons,
     lat=all_lats,
+    marker=dict(size=8, color='cyan'), # Cyan leuchtet gut auf Satellitenbildern
     hoverinfo='text',
     text=all_texts,
-    mode='markers',
-    marker=dict(size=5, color='blue', symbol='circle'),
     name='Flughäfen'
 ))
 
-# 4. Kartenlayout anpassen
+# 4. Kartenlayout: Satellit + 3D Neigung
 fig.update_layout(
+    margin={"r":0,"t":0,"l":0,"b":0},
+    height=700,
     showlegend=False,
-    geo=dict(
-        scope='world', # Zeigt die ganze Welt
-        projection_type='equirectangular', # Flache Karte, aber Linien werden als Great Circles (gebogen) berechnet
-        showland=True,
-        landcolor='rgb(243, 243, 243)',
-        countrycolor='rgb(204, 204, 204)',
-        coastlinecolor='rgb(204, 204, 204)',
-        showocean=True,
-        oceancolor='rgb(230, 245, 255)',
-    ),
-    height=600,
-    margin={"r":0,"t":0,"l":0,"b":0}
+    mapbox=dict(
+        # Wir nutzen 'white-bg' als Basis und legen ESRI-Satellitenbilder darüber (Kostenlos!)
+        style="white-bg",
+        layers=[
+            {
+                # Layer 1: Satellitenbilder (World Imagery)
+                "below": 'traces',
+                "sourcetype": "raster",
+                "source": [
+                    "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+                ]
+            },
+            {
+                # Layer 2: Grenzen, Straßen und Städtenamen (Reference Overlay)
+                "below": 'traces',
+                "sourcetype": "raster",
+                "source": [
+                    "https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}"
+                ]
+            }
+        ],
+        center=dict(lat=30, lon=-80), # Startet über USA/Karibik (Hauptfluggebiet)
+        zoom=3.5,
+        pitch=45, # Neigung für 3D-Effekt
+        bearing=0
+    )
 )
 
 st.plotly_chart(fig, use_container_width=True)
+st.caption("Hinweis: Nutze die rechte Maustaste (oder Strg + Klick), um die 3D-Ansicht zu drehen und zu kippen.")
 
 st.markdown("---")
 
@@ -229,7 +239,7 @@ st.plotly_chart(fig_bar, use_container_width=True)
 st.success(f"Die Emissionen entsprechen **{format_de(ratio, 4)}%** des Ausstoßes von Ingolstadt.")
 st.markdown("---")
 
-# --- 6. Detaillierte Statistiken (Säulendiagramme) ---
+# --- 6. Detaillierte Statistiken ---
 st.header("📈 Detaillierte Statistiken")
 col_chart1, col_chart2 = st.columns(2)
 
@@ -265,5 +275,3 @@ with col_chart2:
     )
     fig_top5.update_layout(yaxis={'categoryorder':'total ascending'})
     st.plotly_chart(fig_top5, use_container_width=True)
-
-# --- ENDE --- (Keine Rohdaten mehr am Ende)

@@ -186,6 +186,47 @@ fig.add_trace(go.Scattermapbox(
     name='Flughäfen'
 ))
 
+# --- 4. Interaktive 3D Satelliten-Karte ---
+st.header("📍 3D Satelliten-Flugrouten")
+st.markdown("Karte mit **Satellitenbildern**, Ländergrenzen und Städtenamen. Die Linienstärke ist jetzt dünner.")
+
+# 1. Daten gruppieren
+route_counts = map_data.groupby(['Abflugort', 'Zielort', 'lat', 'lon', 'Ziel_lat', 'Ziel_lon']).size().reset_index(name='Anzahl_Fluege')
+
+fig = go.Figure()
+
+# 2. Linien zeichnen (Mapbox Linien sind standardmäßig gerade)
+for index, row in route_counts.iterrows():
+    # NEUE ÄNDERUNG: Linien sind nun dünner (Basis 1, Multiplikator 0.5)
+    line_width = 1 + (row['Anzahl_Fluege'] * 0.5) 
+    
+    hover_text = f"{row['Abflugort']} -> {row['Zielort']}<br>Anzahl Flüge: {row['Anzahl_Fluege']}"
+
+    fig.add_trace(go.Scattermapbox(
+        mode="lines",
+        lon=[row['lon'], row['Ziel_lon']],
+        lat=[row['lat'], row['Ziel_lat']],
+        line=dict(width=line_width, color='red'),
+        hoverinfo='text',
+        text=hover_text,
+        name=f"{row['Anzahl_Fluege']}x Flüge"
+    ))
+
+# 3. Flughäfen als Punkte hinzufügen
+all_lons = list(map_data['lon']) + list(map_data['Ziel_lon'])
+all_lats = list(map_data['lat']) + list(map_data['Ziel_lat'])
+all_texts = list(map_data['Abflugort']) + list(map_data['Zielort'])
+
+fig.add_trace(go.Scattermapbox(
+    mode="markers",
+    lon=all_lons,
+    lat=all_lats,
+    marker=dict(size=8, color='cyan'), # Cyan leuchtet gut auf Satellitenbildern
+    hoverinfo='text',
+    text=all_texts,
+    name='Flughäfen'
+))
+
 # 4. Kartenlayout: Satellit + 3D Neigung
 fig.update_layout(
     margin={"r":0,"t":0,"l":0,"b":0},

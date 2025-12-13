@@ -381,13 +381,72 @@ with col_tree_text:
     """)
 
 # --- OPTIONALE HINWEISZEILE FÜR DEN MAXIMALWERT ---
+# ... (Abschnitt 5 - CO2-Kompensation (Interaktiver Baumvergleich) endet hier)
+# --- OPTIONALE HINWEISZEILE FÜR DEN MAXIMALWERT ---
 if flights_to_analyze < total_flights:
     st.info(f"Der Gesamt-Fußabdruck (bei {total_flights} Flügen) beträgt {format_de(max_emissions, 2)} Tonnen CO₂ und erfordert {format_de(max_trees, 0)} Bäume.")
 
 st.markdown("---")
 
 
-# --- 6. Detaillierte Statistiken (VERSCHOBEN von 6 nach 6) ---
+# --- 5.5 KOMMERZIELLER VERGLEICH (NEU) ---
+st.header("✈️ Vergleich: Kommerzieller Flug")
+st.caption(f"Angenommen, Tom Cruise wäre dieselbe Distanz in einem mittelgroßen Flugzeug (ca. 150 Passagiere) geflogen, wobei sein CO₂-Anteil nur 10% der Privatjet-Emissionen beträgt.")
+
+# NEUE BERECHNUNGSBASIS
+COMMERCIAL_FACTOR = 0.10 # 10% der Privatjet-Emissionen
+commercial_total_emissions = total_emissions * COMMERCIAL_FACTOR
+commercial_avg_emissions = commercial_total_emissions / total_flights
+
+# --- INTERAKTIVER SLIDER (Kommerziell) ---
+
+# Der Slider steuert weiterhin die gleiche Anzahl an Flügen
+flights_to_analyze_comm = st.slider(
+    'Anzahl der Flüge, die kommerziell simuliert werden sollen:',
+    min_value=1, 
+    max_value=total_flights,
+    value=total_flights,
+    step=1,
+    key='commercial_slider' # Eindeutige ID für Streamlit-Slider
+)
+
+# Berechnung der CO2-Emissionen und Bäume basierend auf dem Slider-Wert (Kommerziell)
+current_emissions_comm = flights_to_analyze_comm * commercial_avg_emissions
+current_trees_comm = current_emissions_comm / CO2_PER_TREE_TONS_ANNUALLY
+
+current_emissions_formatted_comm = format_de(current_emissions_comm, 2)
+current_trees_formatted_comm = format_de(current_trees_comm, 0)
+
+# 1. Berechnung der visuellen Baumgröße (skaliert)
+min_font_size_comm = 30  
+max_font_size_comm = 100 
+if total_flights > 1:
+    tree_scale_comm = (flights_to_analyze_comm / total_flights)
+else:
+    tree_scale_comm = 1 
+
+font_size_px_comm = int(min_font_size_comm + (max_font_size_comm - min_font_size_comm) * tree_scale_comm)
+
+col_comm_icon, col_comm_text = st.columns([1, 4])
+
+with col_comm_icon:
+    # Baumsymbol (Laubbaum) mit dynamischer Größe
+    st.markdown(f"<p style='font-size: {font_size_px_comm}px; line-height: 1;'>✈️</p>", unsafe_allow_html=True) # Icon als Flugzeug-Emoji
+    st.markdown(f"**{current_trees_formatted_comm}**", unsafe_allow_html=True)
+
+with col_comm_text:
+    st.markdown(f"""
+    Bei **{flights_to_analyze_comm} Flügen** in der kommerziellen Klasse (Tom Cruises Anteil) entstehen nur **{current_emissions_formatted_comm} Tonnen CO₂**.
+    
+    Dies würde nur **{current_trees_formatted_comm} Bäume** für den Ausgleich erfordern.
+    
+    *Differenz im CO₂-Ausstoß: **{format_de(current_emissions - current_emissions_comm, 2)} Tonnen**.*
+    """)
+
+st.markdown("---")
+
+
+# --- 6. Detaillierte Statistiken ---
 st.header("📈 Detaillierte Statistiken")
 col_chart1, col_chart2 = st.columns(2)
 

@@ -308,46 +308,49 @@ legend_data = pd.DataFrame({
     'Farbe': [1, 2, 3, 4, 5]
 })
 
-fig_legend = px.bar(
-    legend_data,
-    y=['Flugdichte'], # Dummy-Y-Achse, nur um den Balken zu erstellen
-    x='Farbe',
-    color='Farbe',
-    color_continuous_scale=[[0, 'rgb(0,255,0)'], [0.25, 'rgb(128,255,0)'], [0.5, 'rgb(255,255,0)'], [0.75, 'rgb(255,165,0)'], [1, 'rgb(255,0,0)']], # Grün bis Rot
-    orientation='h',
-    height=50 # Kleine Höhe
-)
+# --- HIER WIRD DIE LEGENDE ALS SEPARATES ELEMENT EINGEFÜGT ---
+st.subheader("Farb-Legende der Flugdichte")
 
-# Layout-Anpassungen für die Legende
+# Verwende eine Dummy-Spur, um die Farbskala anzuzeigen
+fig_legend = go.Figure()
+
+# Definiere den Farbverlauf (muss mit der Farblogik in get_color übereinstimmen)
+# Grün (0) -> Gelb (0.5) -> Rot (1)
+colorscale_definition = [[0, 'rgb(0,255,0)'], [0.5, 'rgb(255,255,0)'], [1, 'rgb(255,0,0)']]
+
+# Fugue eine Dummy-Choropleth-Spur hinzu, deren einziger Zweck es ist, die Farbskala zu tragen
+# Wir setzen die Daten auf einen einzigen Wert, der Rest ist Styling
+fig_legend.add_trace(go.Choropleth(
+    z=[(max_flights + min_flights) / 2],  # Irgendein Wert im Bereich
+    colorscale=colorscale_definition,
+    showscale=True, # Legende anzeigen
+    marker_line_width=0,
+    zmin=min_flights,
+    zmax=max_flights,
+    colorbar=dict(
+        title='Anzahl Flüge',
+        orientation='h', # Horizontal
+        thickness=25,
+        len=0.7, # Länge 70%
+        x=0.5,
+        y=0.5,
+        xanchor='center',
+        yanchor='middle',
+        # Anpassung der Ticks für Lesbarkeit (min und max Werte anzeigen)
+        tickvals=[min_flights, max_flights], 
+        ticktext=[f'Selten ({format_de(min_flights)})', f'Häufig ({format_de(max_flights)})'],
+    )
+))
+
+# Layout-Anpassungen für die Legende (entfernt alle Achsen und Ränder)
 fig_legend.update_layout(
-    margin=dict(l=10, r=10, t=20, b=10),
-    xaxis=dict(
-        title=None,
-        showticklabels=False,
-        showgrid=False,
-        zeroline=False
-    ),
-    yaxis=dict(
-        title=None,
-        showticklabels=False,
-        showgrid=False,
-        zeroline=False
-    ),
-    coloraxis_showscale=False # Keine Farbskala anzeigen, da der Balken selbst die Skala ist
+    margin=dict(l=0, r=0, t=0, b=0),
+    height=100, # Geringe Höhe
+    geo=dict(showland=False, showocean=False), # Kartenelemente ausblenden
+    plot_bgcolor='rgba(0,0,0,0)',
+    paper_bgcolor='rgba(0,0,0,0)',
+    showlegend=False
 )
-
-# Fügen Sie Textlabels für die Legendenpunkte hinzu (optional)
-fig_legend.add_annotation(
-    x=min_flights, y=0,
-    text=f"Selten<br>({format_de(min_flights)}x)",
-    showarrow=False, yshift=20, xanchor="left", font=dict(color="green")
-)
-fig_legend.add_annotation(
-    x=max_flights, y=0,
-    text=f"Häufig<br>({format_de(max_flights)}x)",
-    showarrow=False, yshift=20, xanchor="right", font=dict(color="red")
-)
-
 
 st.plotly_chart(fig_legend, use_container_width=True)
 

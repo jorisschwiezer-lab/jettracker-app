@@ -5,16 +5,22 @@ import plotly.express as px
 import plotly.graph_objects as go
 import re
 
-# --- 1. Konfiguration und Daten laden ---
+# --- 1. Konfiguration ---
 st.set_page_config(layout="wide", page_title="Privatjet Tracker Tom Cruise", page_icon="✈️")
 
-# Name der CSV-Datei
-CSV_FILE = 'tom_cruise_n350xx_flights.csv'
+# CSS HACK: Entfernt den weißen Rand oben, damit der "Space Look" besser wirkt
+st.markdown("""
+<style>
+    .block-container {padding-top: 1rem; padding-bottom: 0rem;}
+    div[data-testid="stMetricValue"] {font-size: 1.5rem !important;}
+</style>
+""", unsafe_allow_html=True)
 
-# Konstante für den CO2-Vergleich
+# Konstanten
+CSV_FILE = 'tom_cruise_n350xx_flights.csv'
 CO2_INGOLSTADT_ANNUAL_TONS = 1800000
 
-# Dictionary mit den geokodierten Koordinaten
+# Koordinaten (Deine Liste)
 AIRPORT_COORDINATES = {
     'FXE': (26.197, -80.174), 'VNY': (34.209, -118.490), 'SUA': (27.247, -80.244),
     'CAK': (40.923, -81.442), 'MRY': (36.586, -121.870), 'APF': (26.146, -81.773),
@@ -57,18 +63,15 @@ AIRPORT_COORDINATES = {
     'SFO': (37.619, -122.375)
 }
 
-# Funktion zum Extrahieren des Airport-Codes
+# --- 2. Funktionen ---
 def extract_airport_code(location_str):
     if not isinstance(location_str, str): return None
     match = re.search(r'\(([^)]+)\)', str(location_str))
     return match.group(1).split()[-1] if match else None
 
-# Funktion zum Laden und Vorbereiten der Daten
 @st.cache_data
 def load_data(file_path):
     df = pd.read_csv(file_path)
-
-    # Datenbereinigung und Typkonvertierung
     df['Datum'] = pd.to_datetime(df['Datum'], format='%d.%m.%Y', errors='coerce')
     df.dropna(subset=['Datum'], inplace=True)
     df.sort_values(by='Datum', inplace=True)
@@ -79,8 +82,6 @@ def load_data(file_path):
              df[col] = df[col].astype(str).str.replace(',', '').astype(float)
 
     df['Flugnummer'] = np.arange(1, len(df) + 1)
-
-    # GEOKODIERUNG
     df['Abflug_Code'] = df['Abflugort'].apply(extract_airport_code)
     df['Ziel_Code'] = df['Zielort'].apply(extract_airport_code)
 
@@ -91,46 +92,32 @@ def load_data(file_path):
     
     return df
 
-# Daten laden
+# --- 3. Hauptprogramm ---
+
 try:
     data = load_data(CSV_FILE)
-    total_flights = len(data)
-    # Entferne Zeilen ohne Koordinaten für die Karte
     map_data = data.dropna(subset=['lat', 'lon', 'Ziel_lat', 'Ziel_lon'])
-    
-    if map_data.empty:
-         st.error("FEHLER: Keine gültigen Koordinaten gefunden.")
-         st.stop()
-    st.success(f"Daten erfolgreich geladen. {total_flights} Flüge aus 2024.")
-except FileNotFoundError:
-    st.error(f"FEHLER: Datei '{CSV_FILE}' nicht gefunden.")
+    total_flights = len(data)
+    st.success(f"Datensatz geladen: {total_flights} Flüge.")
+except Exception as e:
+    st.error(f"Fehler: {e}")
     st.stop()
 
-
-# --- 2. Seitentitel und Bilder ---
+# Layout Titel
 st.title("Privatjet Tracker Tom Cruise")
 
 col_img1, col_text, col_img2 = st.columns([1, 2, 1])
-
 with col_img1:
     st.image("image-w856.jpg.webp", caption="Berühmtheit: Tom Cruise")
-
 with col_text:
-    st.header(f"Analyse der Flugbewegungen 2024")
-    st.markdown(f"Analysiert **{total_flights}** Flüge von N350XX im Jahr 2024.")
-    st.markdown("---")
-
+    st.header("Analyse der Flugbewegungen 2024")
+    st.markdown(f"Tracker für Bombardier Challenger 350 (N350XX).")
 with col_img2:
-    st.image("Bild 2.jpeg", caption="Flugzeugtyp: Bombardier Challenger 350")
-
+    st.image("Bild 2.jpeg", caption="Flugzeugtyp: Challenger 350")
 st.markdown("---")
 
-
-# --- 3. Statistische Kennzahlen (KPIs) ---
-st.header("📊 Statistische Kennzahlen")
-
+# KPIs
 total_distance = data['Distanz (Meilen)'].sum()
-total_fuel = data['Treibstoffverbrauch (Gallons)'].sum()
 total_emissions = data['Emissionen (Metrische Tonnen)'].sum()
 avg_emissions = data['Emissionen (Metrische Tonnen)'].mean()
 
@@ -139,139 +126,144 @@ def format_de(number, decimals=0):
 
 c1, c2, c3, c4 = st.columns(4)
 c1.metric("Anzahl Flüge", total_flights)
-c2.metric("Gesamtdistanz (Meilen)", format_de(total_distance))
-c3.metric("Emissionen (Tonnen CO₂)", format_de(total_emissions))
-c4.metric("Ø CO₂ pro Flug", format_de(avg_emissions, 1))
+c2.metric("Gesamtdistanz", format_de(total_distance) + " Meilen")
+c3.metric("Emissionen", format_de(total_emissions) + " t CO₂")
+c4.metric("Ø pro Flug", format_de(avg_emissions, 1) + " t CO₂")
 
 st.markdown("---")
 
-# --- 4. Interaktive 3D Satelliten-Karte ---
-st.header("📍 3D Satelliten-Flugrouten")
-st.markdown("Karte mit **Satellitenbildern**, Ländergrenzen und Städtenamen. Die Dicke der Linien zeigt die Häufigkeit.")
+# --- 4. HIGH-END 3D GLOBUS ---
+st.header("🌍 Flugrouten & Frequenz")
+st.markdown("""
+<div style="background-color: #0e1117; padding: 10px; border-radius: 5px; border-left: 5px solid #FFD700;">
+    <strong>Legende:</strong> 
+    <span style="color: #FFD700;">⬥ Goldene Diamanten</span> = Flughäfen | 
+    <span style="color: #FF4B4B;">Dicke Linien</span> = Häufige Routen |
+    Die Linien folgen der <strong>realen Erdkrümmung</strong> (Orthodromen).
+</div>
+""", unsafe_allow_html=True)
 
-# 1. Daten gruppieren
-route_counts = map_data.groupby(['Abflugort', 'Zielort', 'lat', 'lon', 'Ziel_lat', 'Ziel_lon']).size().reset_index(name='Anzahl_Fluege')
+# Daten gruppieren für Dicke
+route_counts = map_data.groupby(['Abflugort', 'Zielort', 'lat', 'lon', 'Ziel_lat', 'Ziel_lon']).size().reset_index(name='Anzahl')
 
 fig = go.Figure()
 
-# 2. Linien zeichnen (Mapbox Linien sind standardmäßig gerade)
-for index, row in route_counts.iterrows():
-    line_width = 2 + (row['Anzahl_Fluege'] * 1.5) # Breitere Linien für bessere Sichtbarkeit auf Satellit
-    
-    hover_text = f"{row['Abflugort']} -> {row['Zielort']}<br>Anzahl Flüge: {row['Anzahl_Fluege']}"
+# A. FLUGROUTEN (Linien)
+# Wir sortieren, damit die dicken Linien OBEN liegen
+route_counts = route_counts.sort_values(by='Anzahl', ascending=True)
 
-    fig.add_trace(go.Scattermapbox(
-        mode="lines",
+for index, row in route_counts.iterrows():
+    # Logik für Liniendicke: 1 Flug = dünn, viele Flüge = sehr dick
+    width = 0.5 + (row['Anzahl'] * 1.5) 
+    # Logik für Farbe/Transparenz: Häufige Flüge leuchten stärker
+    opacity = 0.4 + (min(row['Anzahl'], 5) * 0.1) 
+    
+    hover_txt = f"{row['Abflugort']} ➝ {row['Zielort']}<br>Anzahl: {row['Anzahl']}"
+    
+    fig.add_trace(go.Scattergeo(
         lon=[row['lon'], row['Ziel_lon']],
         lat=[row['lat'], row['Ziel_lat']],
-        line=dict(width=line_width, color='red'),
+        mode='lines',
+        # Helle "Neon"-Farbe für Kontrast zum dunklen Globus
+        line=dict(width=width, color='#FF4B4B'), 
+        opacity=opacity,
         hoverinfo='text',
-        text=hover_text,
-        name=f"{row['Anzahl_Fluege']}x Flüge"
+        text=hover_txt,
+        name=f"{row['Anzahl']}x"
     ))
 
-# 3. Flughäfen als Punkte hinzufügen
+# B. FLUGHÄFEN (Design-Element: Goldene Diamanten)
 all_lons = list(map_data['lon']) + list(map_data['Ziel_lon'])
 all_lats = list(map_data['lat']) + list(map_data['Ziel_lat'])
 all_texts = list(map_data['Abflugort']) + list(map_data['Zielort'])
 
-fig.add_trace(go.Scattermapbox(
-    mode="markers",
-    lon=all_lons,
-    lat=all_lats,
-    marker=dict(size=8, color='cyan'), # Cyan leuchtet gut auf Satellitenbildern
-    hoverinfo='text',
-    text=all_texts,
-    name='Flughäfen'
+# Einzigartige Flughäfen filtern
+unique_airports = pd.DataFrame({'lon': all_lons, 'lat': all_lats, 'Ort': all_texts}).drop_duplicates()
+
+# 1. Layer: Glow-Effekt (Großer, transparenter Punkt dahinter)
+fig.add_trace(go.Scattergeo(
+    lon=unique_airports['lon'],
+    lat=unique_airports['lat'],
+    mode='markers',
+    marker=dict(size=15, color='#FFD700', opacity=0.3, symbol='circle'),
+    hoverinfo='skip'
 ))
 
-# 4. Kartenlayout: Satellit + 3D Neigung
+# 2. Layer: Der eigentliche Marker (Scharfer Diamant)
+fig.add_trace(go.Scattergeo(
+    lon=unique_airports['lon'],
+    lat=unique_airports['lat'],
+    text=unique_airports['Ort'],
+    mode='markers',
+    marker=dict(
+        size=6, 
+        color='#FFD700',      # Gold
+        symbol='diamond',     # Design-Element
+        line=dict(width=1, color='black') # Schwarzer Rand für Kontrast
+    ),
+    hoverinfo='text',
+    name='Airports'
+))
+
+# C. GLOBUS LAYOUT (Satelliten/Dark-Mode Style)
 fig.update_layout(
+    height=750,
     margin={"r":0,"t":0,"l":0,"b":0},
-    height=700,
+    paper_bgcolor='rgba(0,0,0,0)', # Transparenter Hintergrund
+    plot_bgcolor='rgba(0,0,0,0)',
     showlegend=False,
-    mapbox=dict(
-        # Wir nutzen 'white-bg' als Basis und legen ESRI-Satellitenbilder darüber (Kostenlos!)
-        style="white-bg",
-        layers=[
-            {
-                # Layer 1: Satellitenbilder (World Imagery)
-                "below": 'traces',
-                "sourcetype": "raster",
-                "source": [
-                    "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
-                ]
-            },
-            {
-                # Layer 2: Grenzen, Straßen und Städtenamen (Reference Overlay)
-                "below": 'traces',
-                "sourcetype": "raster",
-                "source": [
-                    "https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}"
-                ]
-            }
-        ],
-        center=dict(lat=30, lon=-80), # Startet über USA/Karibik (Hauptfluggebiet)
-        zoom=3.5,
-        pitch=45, # Neigung für 3D-Effekt
-        bearing=0
+    geo=dict(
+        projection_type="orthographic", # Echter 3D Globus
+        showland=True,
+        showlakes=True,
+        showocean=True,
+        showcountries=True,
+        
+        # FARBPALETTE "NIGHT SATELLITE"
+        landcolor="rgb(20, 20, 20)",       # Fast schwarzes Land
+        oceancolor="rgb(10, 10, 25)",      # Tiefblaues/Schwarzes Meer
+        lakecolor="rgb(10, 10, 25)",
+        countrycolor="rgb(60, 60, 60)",    # Dunkelgraue Grenzen
+        coastlinecolor="rgb(100, 100, 100)", # Hellere Küstenlinien
+        
+        bgcolor='rgba(0,0,0,0)', # Kein weißer Kasten um den Globus
+        resolution=50
     )
 )
 
 st.plotly_chart(fig, use_container_width=True)
-st.caption("Hinweis: Nutze die rechte Maustaste (oder Strg + Klick), um die 3D-Ansicht zu drehen und zu kippen.")
-
 st.markdown("---")
 
-# --- 5. Vergleichsanalyse ---
-st.header("⚖️ Vergleich mit Ingolstadt")
-
+# --- 5. Vergleich ---
+st.header("⚖️ CO₂ Vergleich")
 ratio = (total_emissions / CO2_INGOLSTADT_ANNUAL_TONS) * 100
-comparison_df = pd.DataFrame({
+df_comp = pd.DataFrame({
     'Quelle': ['Tom Cruise (2024)', 'Ingolstadt (Jahr)'],
     'CO2': [total_emissions, CO2_INGOLSTADT_ANNUAL_TONS]
 })
-
-fig_bar = px.bar(comparison_df, x='Quelle', y='CO2', color='Quelle',
+fig_bar = px.bar(df_comp, x='Quelle', y='CO2', color='Quelle',
                  color_discrete_map={'Tom Cruise (2024)': '#FF4B4B', 'Ingolstadt (Jahr)': '#0083B8'})
 st.plotly_chart(fig_bar, use_container_width=True)
-
-st.success(f"Die Emissionen entsprechen **{format_de(ratio, 4)}%** des Ausstoßes von Ingolstadt.")
+st.info(f"Tom Cruise entspricht **{format_de(ratio, 4)}%** einer ganzen Stadt.")
 st.markdown("---")
 
-# --- 6. Detaillierte Statistiken ---
-st.header("📈 Detaillierte Statistiken")
-col_chart1, col_chart2 = st.columns(2)
+# --- 6. Statistiken ---
+st.header("📈 Statistiken")
+c1, c2 = st.columns(2)
 
-with col_chart1:
+with c1:
     st.subheader("Emissionen pro Monat")
-    data['Monat_Str'] = data['Datum'].dt.strftime('%Y-%m')
-    monthly_stats = data.groupby('Monat_Str')['Emissionen (Metrische Tonnen)'].sum().reset_index()
-    
-    fig_month = px.bar(
-        monthly_stats, 
-        x='Monat_Str', 
-        y='Emissionen (Metrische Tonnen)',
-        labels={'Monat_Str': 'Monat', 'Emissionen (Metrische Tonnen)': 'CO₂ (Tonnen)'},
-        color='Emissionen (Metrische Tonnen)',
-        color_continuous_scale='Reds'
-    )
-    st.plotly_chart(fig_month, use_container_width=True)
+    data['Monat'] = data['Datum'].dt.strftime('%Y-%m')
+    monthly = data.groupby('Monat')['Emissionen (Metrische Tonnen)'].sum().reset_index()
+    fig_m = px.bar(monthly, x='Monat', y='Emissionen (Metrische Tonnen)', 
+                   color='Emissionen (Metrische Tonnen)', color_continuous_scale='Reds')
+    st.plotly_chart(fig_m, use_container_width=True)
 
-with col_chart2:
+with c2:
     st.subheader("Top 5 Zielorte")
-    top_dest = data['Zielort'].value_counts().head(5).reset_index()
-    top_dest.columns = ['Ort', 'Anzahl']
-    top_dest['Label'] = top_dest['Ort'].apply(lambda x: x.split('(')[0][:20] + "..." if len(x) > 20 else x)
-    
-    fig_top5 = px.bar(
-        top_dest,
-        x='Anzahl',
-        y='Label',
-        orientation='h', 
-        labels={'Label': 'Flughafen', 'Anzahl': 'Anzahl Landungen'},
-        color='Anzahl',
-        color_continuous_scale='Blues'
-    )
-    fig_top5.update_layout(yaxis={'categoryorder':'total ascending'})
-    st.plotly_chart(fig_top5, use_container_width=True)
+    top5 = data['Zielort'].value_counts().head(5).reset_index()
+    top5.columns = ['Ort', 'Count']
+    top5['Label'] = top5['Ort'].apply(lambda x: x.split('(')[0][:20] + "...")
+    fig_t = px.bar(top5, x='Count', y='Label', orientation='h', color='Count', color_continuous_scale='Blues')
+    fig_t.update_layout(yaxis={'categoryorder':'total ascending'})
+    st.plotly_chart(fig_t, use_container_width=True)

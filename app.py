@@ -154,7 +154,7 @@ k4.metric("Ø CO₂/Flug", f"{avg_co2:.1f}".replace(".", ","))
 st.markdown("---")
 
 # --- 4. MAPBOX SATELLITEN-KARTE (Gestrichelt & Gekrümmt) ---
-st.header("Flugrouten")
+st.header("📍 Flugrouten")
 st.markdown("Satellitenansicht. Die Routen folgen der Erdkrümmung.")
 
 # Gruppieren
@@ -236,7 +236,7 @@ st.plotly_chart(fig, use_container_width=True)
 st.markdown("---")
 
 # --- 5. Vergleich & Diagramme ---
-st.header("Statistiken & Vergleich")
+st.header("📊 Statistiken & Vergleich")
 
 c_left, c_right = st.columns(2)
 

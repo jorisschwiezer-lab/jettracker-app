@@ -4,7 +4,7 @@ import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
 import re
-import math
+import math 
 
 # --- 1. Konfiguration und Daten laden ---
 st.set_page_config(layout="wide", page_title="Privatjet Tracker Tom Cruise", page_icon="✈️")
@@ -77,7 +77,7 @@ def load_data(file_path):
     cols_to_clean = ['Distanz (Meilen)', 'Treibstoffverbrauch (Gallons)', 'Emissionen (Metrische Tonnen)']
     for col in cols_to_clean:
         if df[col].dtype == object:
-             df[col] = df[col].astype(str).str.replace(',', '').astype(float)
+            df[col] = df[col].astype(str).str.replace(',', '').astype(float)
 
     df['Flugnummer'] = np.arange(1, len(df) + 1)
 
@@ -100,8 +100,8 @@ try:
     map_data = data.dropna(subset=['lat', 'lon', 'Ziel_lat', 'Ziel_lon'])
     
     if map_data.empty:
-         st.error("FEHLER: Keine gültigen Koordinaten gefunden.")
-         st.stop()
+        st.error("FEHLER: Keine gültigen Koordinaten gefunden.")
+        st.stop()
     st.success(f"Daten erfolgreich geladen. {total_flights} Flüge aus 2024.")
 except FileNotFoundError:
     st.error(f"FEHLER: Datei '{CSV_FILE}' nicht gefunden.")
@@ -146,52 +146,8 @@ c4.metric("Ø CO₂ pro Flug", format_de(avg_emissions, 1))
 
 st.markdown("---")
 
-# --- 4. Interaktive 3D Satelliten-Karte ---
-st.header("📍 3D Satelliten-Flugrouten")
-st.markdown("Karte mit **Satellitenbildern**, Ländergrenzen und Städtenamen. Die Dicke der Linien zeigt die Häufigkeit.")
 
-# 1. Daten gruppieren
-route_counts = map_data.groupby(['Abflugort', 'Zielort', 'lat', 'lon', 'Ziel_lat', 'Ziel_lon']).size().reset_index(name='Anzahl_Fluege')
-
-fig = go.Figure()
-
-# 2. Linien zeichnen (Mapbox Linien sind standardmäßig gerade)
-for index, row in route_counts.iterrows():
-    # HIER WURDE GEÄNDERT: Aggressivere Formel für die Dicke (Start bei 3, Faktor 3)
-    line_width = 3 + (row['Anzahl_Fluege'] * 3) 
-    
-    hover_text = f"{row['Abflugort']} -> {row['Zielort']}<br>Anzahl Flüge: {row['Anzahl_Fluege']}"
-
-    fig.add_trace(go.Scattermapbox(
-        mode="lines",
-        lon=[row['lon'], row['Ziel_lon']],
-        lat=[row['lat'], row['Ziel_lat']],
-        line=dict(width=line_width, color='red'),
-        hoverinfo='text',
-        text=hover_text,
-        name=f"{row['Anzahl_Fluege']}x Flüge"
-    ))
-
-# 3. Flughäfen als Punkte hinzufügen
-all_lons = list(map_data['lon']) + list(map_data['Ziel_lon'])
-all_lats = list(map_data['lat']) + list(map_data['Ziel_lat'])
-all_texts = list(map_data['Abflugort']) + list(map_data['Zielort'])
-
-fig.add_trace(go.Scattermapbox(
-    mode="markers",
-    lon=all_lons,
-    lat=all_lats,
-    marker=dict(size=8, color='cyan'), # Cyan leuchtet gut auf Satellitenbildern
-    hoverinfo='text',
-    text=all_texts,
-    name='Flughäfen'
-))
-
-import math # Import math muss am Anfang des Skripts sein
-
-# ... (Restlicher Code bis Zeile 156 bleibt unverändert)
-
-# --- 4. Interaktive 3D Satelliten-Karte (FINALE VERSION: Gekrümmt, Farbig, Icons + Legende) ---
+# --- 4. Interaktive 3D Satelliten-Karte (FINALE VERSION: Gekrümmt, Farbig, Icons) ---
 st.header("📍 3D Satelliten-Flugrouten")
 st.markdown("Farbkodierung: **Grün** (selten) ➡ **Rot** (häufig). Flugzeug-Icon in der Mitte der Route zeigt die Richtung an.")
 
@@ -210,7 +166,6 @@ def get_color(value, min_v, max_v):
     g = int(255 * (1 - ratio))
     yellow_factor = 255 * min(ratio, 1 - ratio) * 2
     b = 0
-    # Farbskala RGB(rot, grün, blau)
     return f"rgb({min(255, r + int(yellow_factor/2))}, {min(255, g + int(yellow_factor/2))}, {b})"
 
 
@@ -266,8 +221,6 @@ for index, row in route_counts.iterrows():
         hoverinfo='text',
         text=hover_text,
         opacity=0.8,
-        # Füge einen Wert für die Farbskala hinzu (auch wenn sie nicht direkt benutzt wird)
-        marker=dict(color=row['Anzahl_Fluege'], cmin=min_flights, cmax=max_flights),
         showlegend=False
     ))
 
@@ -306,37 +259,15 @@ fig.add_trace(go.Scattermapbox(
     hoverinfo='text',
     text=all_texts,
     name='Flughäfen',
-    showlegend=False # Keine Legende für die Punkte
+    showlegend=False 
 ))
 
-
-# 4. Kartenlayout: Satellit + 3D Neigung und HINZUFÜGEN DER LEGENDE
+# 4. Kartenlayout: Satellit + 3D Neigung (OHNE Legende)
 fig.update_layout(
     margin={"r":0,"t":0,"l":0,"b":0},
     height=700,
     showlegend=False,
-    # Hinzufügen der Farbskala (Legend) unten rechts
-    coloraxis=dict(
-        colorscale=[[0, 'green'], [0.5, 'yellow'], [0.75, 'orange'], [1, 'red']], # Visueller Farbverlauf
-        colorbar=dict(
-            title='Anzahl Flüge',
-            thicknessmode="pixels",
-            thickness=15,
-            lenmode="fraction",
-            len=0.3, # Länge 30% der Karte
-            x=1, # Position ganz rechts (standardmäßig 1)
-            y=0, # Position ganz unten (standardmäßig 0)
-            xanchor="right",
-            yanchor="bottom",
-            # Anpassung der Ticks für Lesbarkeit
-            tickvals=[min_flights, max_flights * 0.5, max_flights], 
-            ticktext=['Selten (Grün)', 'Mittel', 'Häufig (Rot)'],
-            bgcolor='rgba(255, 255, 255, 0.7)' # Weißer, leicht transparenter Hintergrund
-        ),
-        cmin=min_flights,
-        cmax=max_flights,
-        showscale=True # Legende anzeigen
-    ),
+    # <<< COLORAXIS FÜR KARTENLEGENDE WURDE ENTFERNT >>>
     mapbox=dict(
         style="white-bg", 
         layers=[
@@ -366,6 +297,62 @@ st.plotly_chart(fig, use_container_width=True)
 st.caption("Hinweis: Nutze die rechte Maustaste (oder Strg + Klick), um die 3D-Ansicht zu drehen und zu kippen.")
 
 st.markdown("---")
+
+# --- HIER WIRD DIE LEGENDE ALS SEPARATES ELEMENT EINGEFÜGT ---
+st.subheader("Farb-Legende der Flugdichte")
+
+# Erstelle ein einfaches, horizontales Balkendiagramm für die Legende
+legend_data = pd.DataFrame({
+    'Wert': [min_flights, max_flights * 0.25, max_flights * 0.5, max_flights * 0.75, max_flights],
+    'Label': ['Selten (Grün)', '', 'Mittel', '', 'Häufig (Rot)'],
+    'Farbe': [1, 2, 3, 4, 5]
+})
+
+fig_legend = px.bar(
+    legend_data,
+    y=['Flugdichte'], # Dummy-Y-Achse, nur um den Balken zu erstellen
+    x='Farbe',
+    color='Farbe',
+    color_continuous_scale=[[0, 'rgb(0,255,0)'], [0.25, 'rgb(128,255,0)'], [0.5, 'rgb(255,255,0)'], [0.75, 'rgb(255,165,0)'], [1, 'rgb(255,0,0)']], # Grün bis Rot
+    orientation='h',
+    height=50 # Kleine Höhe
+)
+
+# Layout-Anpassungen für die Legende
+fig_legend.update_layout(
+    margin=dict(l=10, r=10, t=20, b=10),
+    xaxis=dict(
+        title=None,
+        showticklabels=False,
+        showgrid=False,
+        zeroline=False
+    ),
+    yaxis=dict(
+        title=None,
+        showticklabels=False,
+        showgrid=False,
+        zeroline=False
+    ),
+    coloraxis_showscale=False # Keine Farbskala anzeigen, da der Balken selbst die Skala ist
+)
+
+# Fügen Sie Textlabels für die Legendenpunkte hinzu (optional)
+fig_legend.add_annotation(
+    x=min_flights, y=0,
+    text=f"Selten<br>({format_de(min_flights)}x)",
+    showarrow=False, yshift=20, xanchor="left", font=dict(color="green")
+)
+fig_legend.add_annotation(
+    x=max_flights, y=0,
+    text=f"Häufig<br>({format_de(max_flights)}x)",
+    showarrow=False, yshift=20, xanchor="right", font=dict(color="red")
+)
+
+
+st.plotly_chart(fig_legend, use_container_width=True)
+
+st.markdown("---")
+
 
 # --- 5. Vergleichsanalyse ---
 st.header("⚖️ Vergleich mit Ingolstadt")

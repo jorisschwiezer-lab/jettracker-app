@@ -15,6 +15,9 @@ CSV_FILE = 'tom_cruise_n350xx_flights.csv'
 # Konstante für den CO2-Vergleich
 CO2_INGOLSTADT_ANNUAL_TONS = 1800000
 
+# NEUE KONSTANTE FÜR BAUMVERGLEICH (HIER FEHLTE DIE DEFINITION)
+CO2_PER_TREE_TONS_ANNUALLY = 0.022 # 22 kg CO2 pro Baum und Jahr (Durchschnittswert)
+
 # Dictionary mit den geokodierten Koordinaten
 AIRPORT_COORDINATES = {
     'FXE': (26.197, -80.174), 'VNY': (34.209, -118.490), 'SUA': (27.247, -80.244),

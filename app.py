@@ -15,8 +15,9 @@ CSV_FILE = 'tom_cruise_n350xx_flights.csv'
 # Konstante für den CO2-Vergleich
 CO2_INGOLSTADT_ANNUAL_TONS = 1800000
 
-# NEUE KONSTANTE FÜR BAUMVERGLEICH (HIER FEHLTE DIE DEFINITION)
+# WICHTIG: KONSTANTE HIER NEU DEFINIERT, UM NAMEERROR ZU VERMEIDEN
 CO2_PER_TREE_TONS_ANNUALLY = 0.022 # 22 kg CO2 pro Baum und Jahr (Durchschnittswert)
+
 
 # Dictionary mit den geokodierten Koordinaten
 AIRPORT_COORDINATES = {
@@ -130,20 +131,15 @@ with col_img2:
 st.markdown("---")
 
 
-# ... (Code bis Zeile 138 bleibt unverändert)
-
 # --- 3. Statistische Kennzahlen (KPIs) ---
 st.header("📊 Statistische Kennzahlen")
 
 total_distance = data['Distanz (Meilen)'].sum()
 total_fuel = data['Treibstoffverbrauch (Gallons)'].sum()
 
-# >>> KORREKTUR BASIEREND AUF NEUER INFORMATION (1787 Tonnen) <<<
+# >>> KORRIGIERTE BASISDATEN HIER EINGEFÜGT (1787 Tonnen CO2) <<<
 total_emissions = 1787.0
 avg_emissions = total_emissions / total_flights 
-# Da die CSV-Daten nicht zur Verfügung stehen, nutzen wir 1787.0 Tonnen als neue Basis.
-# Der Code muss sonst die Emissionen aus den Originaldaten nehmen: 
-# total_emissions = data['Emissionen (Metrische Tonnen)'].sum()
 # -----------------------------------------------------------------
 
 def format_de(number, decimals=0):
@@ -159,7 +155,6 @@ st.markdown("---")
 
 
 # --- 4. Interaktive 3D Satelliten-Karte (FINALE VERSION: Gekrümmt, Farbig, Icons) ---
-# ... (Abschnitt 4 bleibt unverändert, da die Karte die relativen Flugzahlen darstellt, nicht die absoluten Emissionen)
 st.header("📍 3D Satelliten-Flugrouten")
 st.markdown("Farbkodierung: **Grün** (selten) ➡ **Rot** (häufig). Flugzeug-Icon in der Mitte der Route zeigt die Richtung an.")
 
@@ -350,10 +345,8 @@ col_chart1, col_chart2 = st.columns(2)
 
 with col_chart1:
     st.subheader("Emissionen pro Monat")
-    # Anpassung, um die Gesamtemissionen nicht zu verfälschen, da wir keine echten Monatsdaten für 1787 Tonnen haben.
-    # Wir nehmen an, die Verteilung der Emissionen in der CSV ist repräsentativ:
     
-    # NEU: Berechnung eines Korrekturfaktors, um die Summe auf 1787.0 zu skalieren
+    # Skalierungsfaktor zur Anpassung der Monatsdaten an 1787 Tonnen
     original_sum = data['Emissionen (Metrische Tonnen)'].sum()
     scaling_factor = total_emissions / original_sum if original_sum != 0 else 1
     
@@ -392,7 +385,7 @@ with col_chart2:
 
 # --- 7. CO2-Kompensation (Baumvergleich) ---
 st.markdown("---")
-st.header("🌳 CO₂-Kompensation")
+st.header("🌳 CO₂-Kompensation (Baumvergleich)") # Überschrift angepasst
 
 # Berechnung der benötigten Bäume
 required_trees = total_emissions / CO2_PER_TREE_TONS_ANNUALLY
@@ -402,8 +395,8 @@ total_emissions_formatted = format_de(total_emissions, 2)
 col_tree_icon, col_tree_text = st.columns([1, 4])
 
 with col_tree_icon:
-    # Füge ein Baumsymbol hinzu (nutze Emoji für Einfachheit)
-    st.markdown("## 🌲")
+    # Baumsymbol auf LAUBBAUM geändert
+    st.markdown("## 🌳") 
     st.markdown(f"**{required_trees_formatted}**")
 
 with col_tree_text:

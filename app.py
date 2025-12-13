@@ -398,10 +398,10 @@ with col_tree_icon:
     # Baumsymbol auf LAUBBAUM geändert
     st.markdown("## 🌳") 
     st.markdown(f"**{required_trees_formatted}**")
-
+    
 with col_tree_text:
     st.markdown(f"""
     Um die durch Tom Cruises Privatjet verursachten Emissionen von **{total_emissions_formatted} Tonnen CO₂**
     im Laufe eines Jahres auszugleichen, müssten **{required_trees_formatted} Bäume** neu gepflanzt werden.
-    *(Basierend auf einem Durchschnittswert von $0.022 \text{ Tonnen}$ CO₂-Aufnahme pro Baum und Jahr)*
-    """)
+    *(Basierend auf einem Durchschnittswert von 0.022 Tonnen CO₂-Aufnahme pro Baum und Jahr)*
+    """) # <<< KORREKTUR: LaTeX-Syntax wurde entfernt >>>

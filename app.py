@@ -307,7 +307,6 @@ legend_data = pd.DataFrame({
     'Label': ['Selten (Grün)', '', 'Mittel', '', 'Häufig (Rot)'],
     'Farbe': [1, 2, 3, 4, 5]
 })
-# ... (Code für die 3D-Karte endet hier)
 
 st.plotly_chart(fig, use_container_width=True)
 st.caption("Hinweis: Nutze die rechte Maustaste (oder Strg + Klick), um die 3D-Ansicht zu drehen und zu kippen.")
@@ -315,18 +314,20 @@ st.caption("Hinweis: Nutze die rechte Maustaste (oder Strg + Klick), um die 3D-A
 st.markdown("---")
 
 # --- HIER WIRD DIE LEGENDE ALS EINFACHER TEXT EINGEFÜGT ---
-st.subheader("Bedeutung der Flugfarben (Legende)")
+# Das gesamte Legenden-Element wird in einen Container verpackt, um Konflikte zu vermeiden.
+with st.container():
+    st.subheader("Bedeutung der Flugfarben (Legende)")
 
-col_leg1, col_leg2, col_leg3, col_leg4 = st.columns(4)
+    col_leg1, col_leg2, col_leg3, col_leg4 = st.columns(4)
 
-with col_leg1:
-    st.markdown("🟢 **Grün:** Seltene Routen (Niedrige Flugdichte)")
-with col_leg2:
-    st.markdown("🟡 **Gelb:** Mittlere Flugdichte")
-with col_leg3:
-    st.markdown("🟠 **Orange:** Höhere Flugdichte")
-with col_leg4:
-    st.markdown("🔴 **Rot:** Häufigste Routen (Höchste Flugdichte)")
+    with col_leg1:
+        st.markdown("🟢 **Grün:** Seltene Routen (Niedrige Flugdichte)")
+    with col_leg2:
+        st.markdown("🟡 **Gelb:** Mittlere Flugdichte")
+    with col_leg3:
+        st.markdown("🟠 **Orange:** Höhere Flugdichte")
+    with col_leg4:
+        st.markdown("🔴 **Rot:** Häufigste Routen (Höchste Flugdichte)")
 
 st.markdown("---")
 

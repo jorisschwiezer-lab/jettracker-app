@@ -319,7 +319,7 @@ for index, row in route_counts.iterrows():
         lat=[mid_lat],
         marker=dict(
             symbol='airport', # Eingebautes Flugzeug-Symbol
-            size=12,
+            size=30,
             color='black',    # <<< HIER AUF SCHWARZ GEÄNDERT >>>
             angle=bearing     # Drehung in Flugrichtung
         ),

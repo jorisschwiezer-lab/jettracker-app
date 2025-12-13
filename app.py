@@ -1,23 +1,25 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
+import plotly.express as px
 import plotly.graph_objects as go
 import re
 
 # --- 1. Konfiguration ---
 st.set_page_config(layout="wide", page_title="Privatjet Tracker Tom Cruise", page_icon="✈️")
 
-# CSS: Abstände verringern
+# CSS: Abstände verringern und Titel stylen
 st.markdown("""
 <style>
-    .block-container {padding-top: 1rem; padding-bottom: 0rem;}
+    .block-container {padding-top: 1rem; padding-bottom: 2rem;}
+    h1 {text-align: center;}
 </style>
 """, unsafe_allow_html=True)
 
 CSV_FILE = 'tom_cruise_n350xx_flights.csv'
 CO2_INGOLSTADT_ANNUAL_TONS = 1800000
 
-# Koordinaten
+# Koordinaten (Deine Liste)
 AIRPORT_COORDINATES = {
     'FXE': (26.197, -80.174), 'VNY': (34.209, -118.490), 'SUA': (27.247, -80.244),
     'CAK': (40.923, -81.442), 'MRY': (36.586, -121.870), 'APF': (26.146, -81.773),
@@ -67,21 +69,18 @@ def extract_airport_code(location_str):
     match = re.search(r'\(([^)]+)\)', str(location_str))
     return match.group(1).split()[-1] if match else None
 
-# Berechnet Punkte für eine gekrümmte Linie (Great Circle)
-def get_great_circle_path(lat1, lon1, lat2, lon2, num_points=30):
-    # Konvertiere Grad in Radians
+# Berechnet Punkte für eine gekrümmte Linie (Orthodrome)
+def get_great_circle_path(lat1, lon1, lat2, lon2, num_points=25):
+    # Konvertierung zu Radians
     lat1, lon1, lat2, lon2 = map(np.radians, [lat1, lon1, lat2, lon2])
     
-    # Sphärische Interpolation (einfache Approximation für Visualisierung)
-    t = np.linspace(0, 1, num_points)
-    
-    # Vereinfachte Berechnung für Mapbox (Linear zwischen den Vektoren)
-    # Wir nutzen hier eine einfache Interpolation, da Mapbox Mercator ist,
-    # aber wir wollen, dass es "rund" aussieht.
-    # Echte Orthodrome Formel:
+    # Winkelabstand (d)
     d = 2 * np.arcsin(np.sqrt(np.sin((lat2-lat1)/2)**2 + np.cos(lat1)*np.cos(lat2)*np.sin((lon2-lon1)/2)**2))
+    
     if d == 0: return [np.degrees(lat1)], [np.degrees(lon1)]
     
+    # Interpolation
+    t = np.linspace(0, 1, num_points)
     lats, lons = [], []
     for x in t:
         A = np.sin((1-x)*d) / np.sin(d)
@@ -111,6 +110,8 @@ def load_data(file_path):
 
     df['Abflug_Code'] = df['Abflugort'].apply(extract_airport_code)
     df['Ziel_Code'] = df['Zielort'].apply(extract_airport_code)
+    
+    # Koordinaten Mapping
     df['lat'] = df['Abflug_Code'].apply(lambda x: AIRPORT_COORDINATES.get(x, (None, None))[0])
     df['lon'] = df['Abflug_Code'].apply(lambda x: AIRPORT_COORDINATES.get(x, (None, None))[1])
     df['Ziel_lat'] = df['Ziel_Code'].apply(lambda x: AIRPORT_COORDINATES.get(x, (None, None))[0])
@@ -125,74 +126,72 @@ try:
     map_data = data.dropna(subset=['lat', 'lon', 'Ziel_lat', 'Ziel_lon'])
     total_flights = len(data)
 except Exception as e:
-    st.error(f"Fehler beim Laden: {e}")
+    st.error(f"Fehler beim Laden der Daten: {e}")
     st.stop()
 
-# Header
+# --- HEADER BEREICH ---
 st.title("Privatjet Tracker Tom Cruise")
 c1, c2, c3 = st.columns([1, 2, 1])
 with c1: st.image("image-w856.jpg.webp", caption="Tom Cruise")
 with c2: 
-    st.header("Analyse der Flugbewegungen 2024")
-    st.markdown(f"**{total_flights} Flüge** | N350XX | Bombardier Challenger 350")
-with c3: st.image("Bild 2.jpeg", caption="Der Jet")
-st.markdown("---")
+    st.header("Flugbewegungen 2024")
+    st.markdown(f"**{total_flights} Flüge** erfasst")
+    st.markdown("Bombardier Challenger 350 (N350XX)")
+with c3: st.image("Bild 2.jpeg", caption="Challenger 350")
 
-# KPIs
+# --- KPIs ---
 total_dist = data['Distanz (Meilen)'].sum()
 total_co2 = data['Emissionen (Metrische Tonnen)'].sum()
 avg_co2 = data['Emissionen (Metrische Tonnen)'].mean()
-
 def fmt(n): return f"{n:,.0f}".replace(",", ".")
 
+st.markdown("---")
 k1, k2, k3, k4 = st.columns(4)
-k1.metric("Flüge", total_flights)
-k2.metric("Meilen", fmt(total_dist))
+k1.metric("Anzahl Flüge", total_flights)
+k2.metric("Gesamtmeilen", fmt(total_dist))
 k3.metric("CO₂ (Tonnen)", fmt(total_co2))
 k4.metric("Ø CO₂/Flug", f"{avg_co2:.1f}".replace(".", ","))
-
 st.markdown("---")
 
-# --- 4. MAPBOX SATELLITEN-KARTE (Gestrichelt & Gekrümmt) ---
+# --- 4. MAPBOX SATELLITEN-KARTE (FIX FÜR GESTRICHELTE LINIEN) ---
 st.header("📍 Flugrouten")
-st.markdown("Satellitenansicht. Die Routen folgen der Erdkrümmung.")
+st.markdown("Satellitenansicht. Gekrümmte Flugrouten.")
 
-# Gruppieren
+# Daten gruppieren
 routes = map_data.groupby(['Abflugort', 'Zielort', 'lat', 'lon', 'Ziel_lat', 'Ziel_lon']).size().reset_index(name='Count')
 
 fig = go.Figure()
 
 for i, row in routes.iterrows():
-    # 1. Berechne gekrümmte Linie (Orthodrome)
+    # 1. Gekrümmte Linie berechnen
     lats_curve, lons_curve = get_great_circle_path(row['lat'], row['lon'], row['Ziel_lat'], row['Ziel_lon'])
     
-    # 2. Linie zeichnen (Gestrichelt "dot")
+    # 2. Die "gestrichelte" Linie zeichnen (WORKAROUND: markers statt lines)
+    # Scattermapbox unterstützt kein 'dash', daher nutzen wir viele kleine Punkte.
     fig.add_trace(go.Scattermapbox(
-        mode="lines",
+        mode="markers", # WICHTIG: markers statt lines für den Punkt-Effekt
         lon=lons_curve,
         lat=lats_curve,
-        line=dict(width=2, color='#FF3333', dash='dot'), # Rot, gestrichelt, dünn
-        opacity=0.8,
+        marker=dict(size=4, color='#FF3333', opacity=0.8), 
         hoverinfo='text',
-        text=f"{row['Abflugort']} ➝ {row['Zielort']} ({row['Count']}x)",
+        text=f"{row['Abflugort']} ➝ {row['Zielort']}",
         name=f"Route {i}"
     ))
 
-    # 3. Flugzeug in der Mitte (Mittelpunkt der Kurve berechnen)
+    # 3. Flugzeug in der Mitte platzieren
     mid_idx = len(lats_curve) // 2
-    mid_lat = lats_curve[mid_idx]
-    mid_lon = lons_curve[mid_idx]
-
+    
     fig.add_trace(go.Scattermapbox(
         mode="text",
-        lon=[mid_lon],
-        lat=[mid_lat],
-        text="✈", # Flugzeug Symbol
-        textfont=dict(size=16, color="white"), # Weißes Flugzeug für guten Kontrast
-        hoverinfo='skip'
+        lon=[lons_curve[mid_idx]],
+        lat=[lats_curve[mid_idx]],
+        text="✈", # Das Flugzeug-Symbol
+        textfont=dict(size=18, color="white"), # Weiß für guten Kontrast
+        hoverinfo='skip',
+        showlegend=False
     ))
 
-# 4. Flughäfen
+# 4. Flughäfen einzeichnen
 all_lons = list(map_data['lon']) + list(map_data['Ziel_lon'])
 all_lats = list(map_data['lat']) + list(map_data['Ziel_lat'])
 all_texts = list(map_data['Abflugort']) + list(map_data['Zielort'])
@@ -201,19 +200,19 @@ fig.add_trace(go.Scattermapbox(
     mode="markers",
     lon=all_lons,
     lat=all_lats,
-    marker=dict(size=6, color='cyan'),
+    marker=dict(size=7, color='cyan'),
     text=all_texts,
     hoverinfo='text',
-    name='Airports'
+    name='Flughäfen'
 ))
 
-# Layout
+# Karten-Layout (Satellit)
 fig.update_layout(
     margin={"r":0,"t":0,"l":0,"b":0},
     height=700,
     showlegend=False,
     mapbox=dict(
-        style="white-bg", # Basis für Layer
+        style="white-bg",
         layers=[
             {
                 "below": 'traces',
@@ -227,40 +226,38 @@ fig.update_layout(
             }
         ],
         center=dict(lat=35, lon=-90),
-        zoom=3,
-        pitch=30,
+        zoom=3.2,
+        pitch=20, # Leichte 3D-Neigung
     )
 )
 st.plotly_chart(fig, use_container_width=True)
 
 st.markdown("---")
 
-# --- 5. Vergleich & Diagramme ---
-st.header("📊 Statistiken & Vergleich")
-
+# --- 5. Diagramme ---
 c_left, c_right = st.columns(2)
 
 with c_left:
     st.subheader("Emissionen vs. Ingolstadt")
     comp_df = pd.DataFrame({
-        'Quelle': ['Tom Cruise (2024)', 'Ingolstadt (Jahr)'],
+        'Quelle': ['Tom Cruise', 'Stadt Ingolstadt'],
         'CO2': [total_co2, CO2_INGOLSTADT_ANNUAL_TONS]
     })
     fig_comp = px.bar(comp_df, x='Quelle', y='CO2', color='Quelle', 
-                      color_discrete_map={'Tom Cruise (2024)': '#FF4B4B', 'Ingolstadt (Jahr)': '#0083B8'})
+                      color_discrete_map={'Tom Cruise': '#FF4B4B', 'Stadt Ingolstadt': '#0083B8'})
     st.plotly_chart(fig_comp, use_container_width=True)
     st.info(f"Anteil an Ingolstadt: **{(total_co2/CO2_INGOLSTADT_ANNUAL_TONS)*100:.4f}%**")
 
 with c_right:
-    st.subheader("Top 5 Ziele")
+    st.subheader("Top 5 Reiseziele")
     top5 = data['Zielort'].value_counts().head(5).reset_index()
     top5.columns = ['Ort', 'Count']
     top5['Label'] = top5['Ort'].apply(lambda x: x.split('(')[0][:20] + "...")
-    fig_top = px.bar(top5, x='Count', y='Label', orientation='h', 
-                     color='Count', color_continuous_scale='Blues')
+    fig_top = px.bar(top5, x='Count', y='Label', orientation='h', color='Count', color_continuous_scale='Blues')
     fig_top.update_layout(yaxis={'categoryorder':'total ascending'})
     st.plotly_chart(fig_top, use_container_width=True)
 
+# Monatliche Analyse
 st.subheader("Monatliche Emissionen")
 data['Monat'] = data['Datum'].dt.strftime('%Y-%m')
 monthly = data.groupby('Monat')['Emissionen (Metrische Tonnen)'].sum().reset_index()

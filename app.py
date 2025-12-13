@@ -230,7 +230,7 @@ fig.add_trace(go.Scattermapbox(
 
 # --- 4. Interaktive 3D Satelliten-Karte (FINALE VERSION: Gekrümmt, Farbig, Icons) ---
 st.header("📍 3D Satelliten-Flugrouten")
-st.markdown("Farbkodierung: **Grün** (selten) ➡ **Rot** (häufig). Flugzeug-Icon in der Mitte der Route.")
+st.markdown("Farbkodierung: **Grün** (selten) ➡ **Rot** (häufig). Flugzeug-Icon in der Mitte der Route zeigt die Richtung an.")
 
 # 1. Daten gruppieren
 route_counts = map_data.groupby(['Abflugort', 'Zielort', 'lat', 'lon', 'Ziel_lat', 'Ziel_lon']).size().reset_index(name='Anzahl_Fluege')
@@ -245,18 +245,16 @@ def get_color(value, min_v, max_v):
     ratio = (value - min_v) / (max_v - min_v)
     r = int(255 * ratio)
     g = int(255 * (1 - ratio))
-    # Optionale Gelb/Orange Komponente für die Mitte
     yellow_factor = 255 * min(ratio, 1 - ratio) * 2
     b = 0
     return f"rgb({min(255, r + int(yellow_factor/2))}, {min(255, g + int(yellow_factor/2))}, {b})"
 
 
 # Hilfsfunktion für "gekrümmte" Linien (Great Circle Annäherung)
-def create_curved_route(lat1, lon1, lat2, lon2, num_points=50): # num_points auf 50 erhöht für stärkere Krümmung
+def create_curved_route(lat1, lon1, lat2, lon2, num_points=50): 
     lats = []
     lons = []
     
-    # Hier wird für eine optisch stärkere Wölbung die halbe Strecke berechnet (Midpoint)
     for i in range(num_points + 1):
         f = i / num_points
         lats.append(lat1 + (lat2 - lat1) * f)
@@ -322,7 +320,7 @@ for index, row in route_counts.iterrows():
         marker=dict(
             symbol='airport', # Eingebautes Flugzeug-Symbol
             size=12,
-            color='white',    
+            color='black',    # <<< HIER AUF SCHWARZ GEÄNDERT >>>
             angle=bearing     # Drehung in Flugrichtung
         ),
         hoverinfo='skip',

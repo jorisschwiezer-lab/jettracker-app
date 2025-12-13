@@ -4,6 +4,7 @@ import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
 import re
+import math
 
 # --- 1. Konfiguration und Daten laden ---
 st.set_page_config(layout="wide", page_title="Privatjet Tracker Tom Cruise", page_icon="✈️")
@@ -227,17 +228,131 @@ fig.add_trace(go.Scattermapbox(
     name='Flughäfen'
 ))
 
+# --- 4. Interaktive 3D Satelliten-Karte (FINALE VERSION: Gekrümmt, Farbig, Icons) ---
+st.header("📍 3D Satelliten-Flugrouten")
+st.markdown("Farbkodierung: **Grün** (selten) ➡ **Rot** (häufig). Flugzeug-Icon in der Mitte der Route.")
+
+# 1. Daten gruppieren
+route_counts = map_data.groupby(['Abflugort', 'Zielort', 'lat', 'lon', 'Ziel_lat', 'Ziel_lon']).size().reset_index(name='Anzahl_Fluege')
+
+# Maximalwert für die Farberechnung finden
+max_flights = route_counts['Anzahl_Fluege'].max()
+min_flights = route_counts['Anzahl_Fluege'].min()
+
+# Hilfsfunktion für Farben (Grün -> Gelb -> Rot)
+def get_color(value, min_v, max_v):
+    if max_v == min_v: return "rgb(0, 255, 0)" 
+    ratio = (value - min_v) / (max_v - min_v)
+    r = int(255 * ratio)
+    g = int(255 * (1 - ratio))
+    # Optionale Gelb/Orange Komponente für die Mitte
+    yellow_factor = 255 * min(ratio, 1 - ratio) * 2
+    b = 0
+    return f"rgb({min(255, r + int(yellow_factor/2))}, {min(255, g + int(yellow_factor/2))}, {b})"
+
+
+# Hilfsfunktion für "gekrümmte" Linien (Great Circle Annäherung)
+def create_curved_route(lat1, lon1, lat2, lon2, num_points=50): # num_points auf 50 erhöht für stärkere Krümmung
+    lats = []
+    lons = []
+    
+    # Hier wird für eine optisch stärkere Wölbung die halbe Strecke berechnet (Midpoint)
+    for i in range(num_points + 1):
+        f = i / num_points
+        lats.append(lat1 + (lat2 - lat1) * f)
+        lons.append(lon1 + (lon2 - lon1) * f)
+        
+    return lats, lons
+
+# Hilfsfunktion für Flugzeug-Winkel (Bearing)
+def calculate_bearing(lat1, lon1, lat2, lon2):
+    lat1_rad, lon1_rad = math.radians(lat1), math.radians(lon1)
+    lat2_rad, lon2_rad = math.radians(lat2), math.radians(lon2)
+
+    dLon = (lon2_rad - lon1_rad)
+    
+    y = math.sin(dLon) * math.cos(lat2_rad)
+    x = math.cos(lat1_rad) * math.sin(lat2_rad) - \
+        math.sin(lat1_rad) * math.cos(lat2_rad) * math.cos(dLon)
+        
+    brng = math.atan2(y, x)
+    brng = math.degrees(brng)
+    return (brng + 360) % 360
+
+fig = go.Figure()
+
+# 2. Linien und Flugzeuge zeichnen
+for index, row in route_counts.iterrows():
+    # Farbe bestimmen (Grün -> Rot)
+    line_color = get_color(row['Anzahl_Fluege'], min_flights, max_flights)
+    
+    # Koordinaten
+    start_lat, start_lon = row['lat'], row['lon']
+    end_lat, end_lon = row['Ziel_lat'], row['Ziel_lon']
+    
+    # Krümmung berechnen (Simulation durch 50 Segmente)
+    path_lats, path_lons = create_curved_route(start_lat, start_lon, end_lat, end_lon)
+    
+    # A) Die LINIE zeichnen (dünn & farbig)
+    line_width = 1.5 # Feste dünne Linie
+    hover_text = f"{row['Abflugort']} -> {row['Zielort']}<br>Anzahl: {row['Anzahl_Fluege']}"
+    fig.add_trace(go.Scattermapbox(
+        mode="lines",
+        lon=path_lons,
+        lat=path_lats,
+        line=dict(width=line_width, color=line_color), 
+        hoverinfo='text',
+        text=hover_text,
+        opacity=0.8,
+        showlegend=False
+    ))
+
+    # B) Das FLUGZEUG in der Mitte zeichnen
+    mid_index = len(path_lats) // 2
+    mid_lat = path_lats[mid_index]
+    mid_lon = path_lons[mid_index]
+    
+    # Winkel berechnen damit das Flugzeug in Flugrichtung zeigt
+    bearing = calculate_bearing(start_lat, start_lon, end_lat, end_lon)
+
+    fig.add_trace(go.Scattermapbox(
+        mode="markers",
+        lon=[mid_lon],
+        lat=[mid_lat],
+        marker=dict(
+            symbol='airport', # Eingebautes Flugzeug-Symbol
+            size=12,
+            color='white',    
+            angle=bearing     # Drehung in Flugrichtung
+        ),
+        hoverinfo='skip',
+        showlegend=False
+    ))
+
+# 3. Flughäfen als Punkte hinzufügen (Dunkelblau)
+all_lons = list(map_data['lon']) + list(map_data['Ziel_lon'])
+all_lats = list(map_data['lat']) + list(map_data['Ziel_lat'])
+all_texts = list(map_data['Abflugort']) + list(map_data['Zielort'])
+
+fig.add_trace(go.Scattermapbox(
+    mode="markers",
+    lon=all_lons,
+    lat=all_lats,
+    marker=dict(size=6, color='#00008B'), # Dunkelblau
+    hoverinfo='text',
+    text=all_texts,
+    name='Flughäfen'
+))
+
 # 4. Kartenlayout: Satellit + 3D Neigung
 fig.update_layout(
     margin={"r":0,"t":0,"l":0,"b":0},
     height=700,
     showlegend=False,
     mapbox=dict(
-        # Wir nutzen 'white-bg' als Basis und legen ESRI-Satellitenbilder darüber (Kostenlos!)
-        style="white-bg",
+        style="white-bg", 
         layers=[
             {
-                # Layer 1: Satellitenbilder (World Imagery)
                 "below": 'traces',
                 "sourcetype": "raster",
                 "source": [
@@ -245,7 +360,6 @@ fig.update_layout(
                 ]
             },
             {
-                # Layer 2: Grenzen, Straßen und Städtenamen (Reference Overlay)
                 "below": 'traces',
                 "sourcetype": "raster",
                 "source": [
@@ -253,9 +367,9 @@ fig.update_layout(
                 ]
             }
         ],
-        center=dict(lat=30, lon=-80), # Startet über USA/Karibik (Hauptfluggebiet)
+        center=dict(lat=30, lon=-80), 
         zoom=3.5,
-        pitch=45, # Neigung für 3D-Effekt
+        pitch=45, 
         bearing=0
     )
 )

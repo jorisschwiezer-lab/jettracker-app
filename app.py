@@ -307,52 +307,26 @@ legend_data = pd.DataFrame({
     'Label': ['Selten (Grün)', '', 'Mittel', '', 'Häufig (Rot)'],
     'Farbe': [1, 2, 3, 4, 5]
 })
+# ... (Code für die 3D-Karte endet hier)
 
-# --- HIER WIRD DIE LEGENDE ALS SEPARATES ELEMENT EINGEFÜGT ---
-st.subheader("Farb-Legende der Flugdichte")
+st.plotly_chart(fig, use_container_width=True)
+st.caption("Hinweis: Nutze die rechte Maustaste (oder Strg + Klick), um die 3D-Ansicht zu drehen und zu kippen.")
 
-# Verwende eine Dummy-Spur, um die Farbskala anzuzeigen
-fig_legend = go.Figure()
+st.markdown("---")
 
-# Definiere den Farbverlauf (muss mit der Farblogik in get_color übereinstimmen)
-# Grün (0) -> Gelb (0.5) -> Rot (1)
-colorscale_definition = [[0, 'rgb(0,255,0)'], [0.5, 'rgb(255,255,0)'], [1, 'rgb(255,0,0)']]
+# --- HIER WIRD DIE LEGENDE ALS EINFACHER TEXT EINGEFÜGT ---
+st.subheader("Bedeutung der Flugfarben (Legende)")
 
-# Fugue eine Dummy-Choropleth-Spur hinzu, deren einziger Zweck es ist, die Farbskala zu tragen
-# Wir setzen die Daten auf einen einzigen Wert, der Rest ist Styling
-fig_legend.add_trace(go.Choropleth(
-    z=[(max_flights + min_flights) / 2],  # Irgendein Wert im Bereich
-    colorscale=colorscale_definition,
-    showscale=True, # Legende anzeigen
-    marker_line_width=0,
-    zmin=min_flights,
-    zmax=max_flights,
-    colorbar=dict(
-        title='Anzahl Flüge',
-        orientation='h', # Horizontal
-        thickness=25,
-        len=0.7, # Länge 70%
-        x=0.5,
-        y=0.5,
-        xanchor='center',
-        yanchor='middle',
-        # Anpassung der Ticks für Lesbarkeit (min und max Werte anzeigen)
-        tickvals=[min_flights, max_flights], 
-        ticktext=[f'Selten ({format_de(min_flights)})', f'Häufig ({format_de(max_flights)})'],
-    )
-))
+col_leg1, col_leg2, col_leg3, col_leg4 = st.columns(4)
 
-# Layout-Anpassungen für die Legende (entfernt alle Achsen und Ränder)
-fig_legend.update_layout(
-    margin=dict(l=0, r=0, t=0, b=0),
-    height=100, # Geringe Höhe
-    geo=dict(showland=False, showocean=False), # Kartenelemente ausblenden
-    plot_bgcolor='rgba(0,0,0,0)',
-    paper_bgcolor='rgba(0,0,0,0)',
-    showlegend=False
-)
-
-st.plotly_chart(fig_legend, use_container_width=True)
+with col_leg1:
+    st.markdown("🟢 **Grün:** Seltene Routen (Niedrige Flugdichte)")
+with col_leg2:
+    st.markdown("🟡 **Gelb:** Mittlere Flugdichte")
+with col_leg3:
+    st.markdown("🟠 **Orange:** Höhere Flugdichte")
+with col_leg4:
+    st.markdown("🔴 **Rot:** Häufigste Routen (Höchste Flugdichte)")
 
 st.markdown("---")
 

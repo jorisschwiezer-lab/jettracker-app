@@ -16,7 +16,6 @@ CSV_FILE = 'tom_cruise_n350xx_flights.csv'
 CO2_INGOLSTADT_ANNUAL_TONS = 1800000
 
 # Dictionary mit den geokodierten Koordinaten
-# Dictionary mit den geokodierten Koordinaten
 AIRPORT_COORDINATES = {
     'FXE': (26.197, -80.174), 'VNY': (34.209, -118.490), 'SUA': (27.247, -80.244),
     'CAK': (40.923, -81.442), 'MRY': (36.586, -121.870), 'APF': (26.146, -81.773),
@@ -61,37 +60,37 @@ AIRPORT_COORDINATES = {
 
 # Funktion zum Extrahieren des Airport-Codes
 def extract_airport_code(location_str):
-    if not isinstance(location_str, str): return None
-    match = re.search(r'\(([^)]+)\)', str(location_str))
-    return match.group(1).split()[-1] if match else None
+    if not isinstance(location_str, str): return None
+    match = re.search(r'\(([^)]+)\)', str(location_str))
+    return match.group(1).split()[-1] if match else None
 
 # Funktion zum Laden und Vorbereiten der Daten
 @st.cache_data
 def load_data(file_path):
-    df = pd.read_csv(file_path)
+    df = pd.read_csv(file_path)
 
-    # Datenbereinigung und Typkonvertierung
-    df['Datum'] = pd.to_datetime(df['Datum'], format='%d.%m.%Y', errors='coerce')
-    df.dropna(subset=['Datum'], inplace=True)
-    df.sort_values(by='Datum', inplace=True)
+    # Datenbereinigung und Typkonvertierung
+    df['Datum'] = pd.to_datetime(df['Datum'], format='%d.%m.%Y', errors='coerce')
+    df.dropna(subset=['Datum'], inplace=True)
+    df.sort_values(by='Datum', inplace=True)
 
-    cols_to_clean = ['Distanz (Meilen)', 'Treibstoffverbrauch (Gallons)', 'Emissionen (Metrische Tonnen)']
-    for col in cols_to_clean:
-        if df[col].dtype == object:
-             df[col] = df[col].astype(str).str.replace(',', '').astype(float)
+    cols_to_clean = ['Distanz (Meilen)', 'Treibstoffverbrauch (Gallons)', 'Emissionen (Metrische Tonnen)']
+    for col in cols_to_clean:
+        if df[col].dtype == object:
+            df[col] = df[col].astype(str).str.replace(',', '').astype(float)
 
-    df['Flugnummer'] = np.arange(1, len(df) + 1)
+    df['Flugnummer'] = np.arange(1, len(df) + 1)
 
-    # GEOKODIERUNG
-    df['Abflug_Code'] = df['Abflugort'].apply(extract_airport_code)
-    df['Ziel_Code'] = df['Zielort'].apply(extract_airport_code)
+    # GEOKODIERUNG
+    df['Abflug_Code'] = df['Abflugort'].apply(extract_airport_code)
+    df['Ziel_Code'] = df['Zielort'].apply(extract_airport_code)
 
-    df['lat'] = df['Abflug_Code'].apply(lambda x: AIRPORT_COORDINATES.get(x, (None, None))[0])
-    df['lon'] = df['Abflug_Code'].apply(lambda x: AIRPORT_COORDINATES.get(x, (None, None))[1])
-    df['Ziel_lat'] = df['Ziel_Code'].apply(lambda x: AIRPORT_COORDINATES.get(x, (None, None))[0])
-    df['Ziel_lon'] = df['Ziel_Code'].apply(lambda x: AIRPORT_COORDINATES.get(x, (None, None))[1])
-    
-    return df
+    df['lat'] = df['Abflug_Code'].apply(lambda x: AIRPORT_COORDINATES.get(x, (None, None))[0])
+    df['lon'] = df['Abflug_Code'].apply(lambda x: AIRPORT_COORDINATES.get(x, (None, None))[1])
+    df['Ziel_lat'] = df['Ziel_Code'].apply(lambda x: AIRPORT_COORDINATES.get(x, (None, None))[0])
+    df['Ziel_lon'] = df['Ziel_Code'].apply(lambda x: AIRPORT_COORDINATES.get(x, (None, None))[1])
+    
+    return df
 
 # Daten laden
 try:

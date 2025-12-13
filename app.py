@@ -381,8 +381,6 @@ with col_tree_text:
     """)
 
 # --- OPTIONALE HINWEISZEILE FÜR DEN MAXIMALWERT ---
-# ... (Abschnitt 5 - CO2-Kompensation (Interaktiver Baumvergleich) endet hier)
-# --- OPTIONALE HINWEISZEILE FÜR DEN MAXIMALWERT ---
 if flights_to_analyze < total_flights:
     st.info(f"Der Gesamt-Fußabdruck (bei {total_flights} Flügen) beträgt {format_de(max_emissions, 2)} Tonnen CO₂ und erfordert {format_de(max_trees, 0)} Bäume.")
 
@@ -391,12 +389,17 @@ st.markdown("---")
 
 # --- 5.5 KOMMERZIELLER VERGLEICH (NEU) ---
 st.header("✈️ Vergleich: Kommerzieller Flug")
-st.caption(f"Angenommen, Tom Cruise wäre dieselbe Distanz in einem mittelgroßen Flugzeug (ca. 150 Passagiere) geflogen, wobei sein CO₂-Anteil nur 10% der Privatjet-Emissionen beträgt.")
 
 # NEUE BERECHNUNGSBASIS
 COMMERCIAL_FACTOR = 0.10 # 10% der Privatjet-Emissionen
 commercial_total_emissions = total_emissions * COMMERCIAL_FACTOR
 commercial_avg_emissions = commercial_total_emissions / total_flights
+
+st.markdown(f"""
+**Annahme:** Wir gehen davon aus, dass bei einem Flug in einem kommerziellen Flugzeug (ca. 150 Passagiere)
+Tom Cruises anteilige CO₂-Emissionen nur **{format_de(COMMERCIAL_FACTOR * 100, 0)}%** der Emissionen des Privatjets betragen.
+""")
+
 
 # --- INTERAKTIVER SLIDER (Kommerziell) ---
 
@@ -430,8 +433,8 @@ font_size_px_comm = int(min_font_size_comm + (max_font_size_comm - min_font_size
 col_comm_icon, col_comm_text = st.columns([1, 4])
 
 with col_comm_icon:
-    # Baumsymbol (Laubbaum) mit dynamischer Größe
-    st.markdown(f"<p style='font-size: {font_size_px_comm}px; line-height: 1;'>✈️</p>", unsafe_allow_html=True) # Icon als Flugzeug-Emoji
+    # Symbol ist nun der LAUBBAUM und skaliert
+    st.markdown(f"<p style='font-size: {font_size_px_comm}px; line-height: 1;'>🌳</p>", unsafe_allow_html=True) 
     st.markdown(f"**{current_trees_formatted_comm}**", unsafe_allow_html=True)
 
 with col_comm_text:
@@ -440,7 +443,7 @@ with col_comm_text:
     
     Dies würde nur **{current_trees_formatted_comm} Bäume** für den Ausgleich erfordern.
     
-    *Differenz im CO₂-Ausstoß: **{format_de(current_emissions - current_emissions_comm, 2)} Tonnen**.*
+    *Differenz im CO₂-Ausstoß (Privatjet vs. Kommerziell): **{format_de(current_emissions - current_emissions_comm, 2)} Tonnen**.*
     """)
 
 st.markdown("---")

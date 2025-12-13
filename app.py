@@ -299,7 +299,6 @@ fig.update_layout(
         bearing=0
     )
 )
-
 st.plotly_chart(fig, use_container_width=True)
 st.caption("Hinweis: Nutze die rechte Maustaste (oder Strg + Klick), um die 3D-Ansicht zu drehen und zu kippen.")
 
@@ -323,23 +322,72 @@ with st.container():
 st.markdown("---")
 
 
-# --- 5. Vergleichsanalyse ---
-st.header("⚖️ Vergleich mit Ingolstadt")
+# --- 5. CO2-Kompensation (Interaktiver Baumvergleich) (VERSCHOBEN) ---
+st.header("🌳 CO₂-Kompensation (Interaktiv)") # Prominentere Überschrift
 
-ratio = (total_emissions / CO2_INGOLSTADT_ANNUAL_TONS) * 100
-comparison_df = pd.DataFrame({
-    'Quelle': ['Tom Cruise (2024)', 'Ingolstadt (Jahr)'],
-    'CO2': [total_emissions, CO2_INGOLSTADT_ANNUAL_TONS]
-})
+# Gesamtwerte (zur statischen Anzeige im Text)
+max_emissions = total_emissions
+max_trees = max_emissions / CO2_PER_TREE_TONS_ANNUALLY
 
-fig_bar = px.bar(comparison_df, x='Quelle', y='CO2', color='Quelle',
-                 color_discrete_map={'Tom Cruise (2024)': '#FF4B4B', 'Ingolstadt (Jahr)': '#0083B8'})
-st.plotly_chart(fig_bar, use_container_width=True)
 
-st.success(f"Die Emissionen entsprechen **{format_de(ratio, 4)}%** des Ausstoßes von Ingolstadt.")
+# --- INTERAKTIVER SLIDER ---
+st.subheader("Simuliere die benötigten Bäume in Abhängigkeit der Flüge")
+
+# Slider, der die Anzahl der Flüge von 1 bis zur Gesamtzahl steuert
+flights_to_analyze = st.slider(
+    'Anzahl der Flüge, die simuliert werden sollen:',
+    min_value=1, 
+    max_value=total_flights,
+    value=total_flights, # Startwert ist die gesamte Anzahl
+    step=1
+)
+
+# Berechnung der CO2-Emissionen und Bäume basierend auf dem Slider-Wert
+current_emissions = flights_to_analyze * avg_emissions
+current_trees = current_emissions / CO2_PER_TREE_TONS_ANNUALLY
+
+current_emissions_formatted = format_de(current_emissions, 2)
+current_trees_formatted = format_de(current_trees, 0)
+
+
+# --- Visuelle Darstellung ---
+
+# 1. Berechnung der visuellen Baumgröße (skaliert)
+min_font_size = 30  # Kleinste Größe in Pixeln (etwas größer gemacht)
+max_font_size = 100 # Größte Größe in Pixeln (prominenter gemacht)
+if total_flights > 1:
+    tree_scale = (flights_to_analyze / total_flights)
+else:
+    tree_scale = 1 
+
+# Schriftgröße berechnen
+font_size_px = int(min_font_size + (max_font_size - min_font_size) * tree_scale)
+
+
+col_tree_icon, col_tree_text = st.columns([1, 4])
+
+with col_tree_icon:
+    # Baumsymbol (Laubbaum) mit dynamischer Größe über HTML/CSS
+    st.markdown(f"<p style='font-size: {font_size_px}px; line-height: 1;'>🌳</p>", unsafe_allow_html=True)
+    st.markdown(f"**{current_trees_formatted}**", unsafe_allow_html=True)
+
+with col_tree_text:
+    st.markdown(f"""
+    Bei **{flights_to_analyze} Flügen** entstehen Emissionen von **{current_emissions_formatted} Tonnen CO₂**.
+    
+    Um diese Emissionen im Laufe eines Jahres auszugleichen, müssten **{current_trees_formatted} Bäume** neu gepflanzt werden.
+    
+    *(Basierend auf einem Durchschnittswert von 0.022 Tonnen CO₂-Aufnahme pro Baum und Jahr)*
+    """)
+
+# --- OPTIONALE HINWEISZEILE FÜR DEN MAXIMALWERT ---
+if flights_to_analyze < total_flights:
+    st.info(f"Der Gesamt-Fußabdruck (bei {total_flights} Flügen) beträgt {format_de(max_emissions, 2)} Tonnen CO₂ und erfordert {format_de(max_trees, 0)} Bäume.")
+
 st.markdown("---")
 
-# --- 6. Detaillierte Statistiken ---
+
+# --- 6. Detaillierte Statistiken (VERSCHOBEN von 6 nach 6) ---
 st.header("📈 Detaillierte Statistiken")
 col_chart1, col_chart2 = st.columns(2)
 
@@ -381,73 +429,3 @@ with col_chart2:
     )
     fig_top5.update_layout(yaxis={'categoryorder':'total ascending'})
     st.plotly_chart(fig_top5, use_container_width=True)
-
-# ... (Code für die Detaillierten Statistiken endet hier)
-
-
-# --- 7. CO2-Kompensation (Interaktiver Baumvergleich) ---
-st.markdown("---")
-st.header("🌳 Interaktive CO₂-Kompensation")
-
-# Gesamtwerte (zur statischen Anzeige im Text)
-max_emissions = total_emissions
-max_trees = max_emissions / CO2_PER_TREE_TONS_ANNUALLY
-
-
-# --- INTERAKTIVER SLIDER ---
-st.subheader("Simuliere die Auswirkungen")
-
-# Slider, der die Anzahl der Flüge von 1 bis zur Gesamtzahl steuert
-flights_to_analyze = st.slider(
-    'Anzahl der Flüge, die simuliert werden sollen:',
-    min_value=1, 
-    max_value=total_flights,
-    value=total_flights, # Startwert ist die gesamte Anzahl
-    step=1
-)
-
-# Berechnung der CO2-Emissionen und Bäume basierend auf dem Slider-Wert
-# Wir nehmen an, jeder Flug hat den Durchschnitts-CO2-Wert (avg_emissions = 7.9 Tonnen)
-current_emissions = flights_to_analyze * avg_emissions
-current_trees = current_emissions / CO2_PER_TREE_TONS_ANNUALLY
-
-current_emissions_formatted = format_de(current_emissions, 2)
-current_trees_formatted = format_de(current_trees, 0)
-
-
-# --- Visuelle Darstellung ---
-
-# 1. Berechnung der visuellen Baumgröße (skaliert von 100% auf max_flights)
-# Der Baum soll bei 1 Flug klein sein und bei max_flights die volle Größe erreichen.
-min_font_size = 20  # Kleinste Größe in Pixeln (für 1 Flug)
-max_font_size = 80  # Größte Größe in Pixeln (für max_flights)
-# Linear skalieren: (aktueller Wert / Maximalwert) * (Max Größe - Min Größe) + Min Größe
-if total_flights > 1:
-    tree_scale = (flights_to_analyze / total_flights)
-else:
-    tree_scale = 1 # Falls nur ein Flug vorhanden
-
-# Schriftgröße berechnen
-font_size_px = int(min_font_size + (max_font_size - min_font_size) * tree_scale)
-
-
-col_tree_icon, col_tree_text = st.columns([1, 4])
-
-with col_tree_icon:
-    # Baumsymbol (Laubbaum) mit dynamischer Größe über HTML/CSS
-    # Nutzt ungesicherten HTML-Code (unsafe_allow_html=True) zur Größenkontrolle des Emojis
-    st.markdown(f"<p style='font-size: {font_size_px}px;'>🌳</p>", unsafe_allow_html=True)
-    st.markdown(f"**{current_trees_formatted}**")
-
-with col_tree_text:
-    st.markdown(f"""
-    Bei **{flights_to_analyze} Flügen** entstehen Emissionen von **{current_emissions_formatted} Tonnen CO₂**.
-    
-    Um diese Emissionen im Laufe eines Jahres auszugleichen, müssten **{current_trees_formatted} Bäume** neu gepflanzt werden.
-    
-    *(Basierend auf einem Durchschnittswert von 0.022 Tonnen CO₂-Aufnahme pro Baum und Jahr)*
-    """)
-
-# --- OPTIONALE HINWEISZEILE FÜR DEN MAXIMALWERT ---
-if flights_to_analyze < total_flights:
-    st.info(f"Der Gesamt-Fußabdruck (bei {total_flights} Flügen) beträgt {format_de(max_emissions, 2)} Tonnen CO₂ und erfordert {format_de(max_trees, 0)} Bäume.")

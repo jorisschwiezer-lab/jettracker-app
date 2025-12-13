@@ -145,7 +145,7 @@ c3.metric("Emissionen (Tonnen CO₂)", format_de(total_emissions))
 c4.metric("Ø CO₂ pro Flug", format_de(avg_emissions, 1))
 
 st.markdown("---")
-
+# ... (Imports und Datenladefunktionen bleiben unverändert)
 
 # --- 4. Interaktive 3D Satelliten-Karte (FINALE VERSION: Gekrümmt, Farbig, Icons) ---
 st.header("📍 3D Satelliten-Flugrouten")
@@ -196,6 +196,7 @@ def calculate_bearing(lat1, lon1, lat2, lon2):
     brng = math.degrees(brng)
     return (brng + 360) % 360
 
+# Figur erstellen und konfigurieren
 fig = go.Figure()
 
 # 2. Linien und Flugzeuge zeichnen
@@ -262,12 +263,11 @@ fig.add_trace(go.Scattermapbox(
     showlegend=False 
 ))
 
-# 4. Kartenlayout: Satellit + 3D Neigung (OHNE Legende)
+# 4. Kartenlayout: Satellit + 3D Neigung
 fig.update_layout(
     margin={"r":0,"t":0,"l":0,"b":0},
     height=700,
     showlegend=False,
-    # <<< COLORAXIS FÜR KARTENLEGENDE WURDE ENTFERNT >>>
     mapbox=dict(
         style="white-bg", 
         layers=[
@@ -298,23 +298,7 @@ st.caption("Hinweis: Nutze die rechte Maustaste (oder Strg + Klick), um die 3D-A
 
 st.markdown("---")
 
-# --- HIER WIRD DIE LEGENDE ALS SEPARATES ELEMENT EINGEFÜGT ---
-st.subheader("Farb-Legende der Flugdichte")
-
-# Erstelle ein einfaches, horizontales Balkendiagramm für die Legende
-legend_data = pd.DataFrame({
-    'Wert': [min_flights, max_flights * 0.25, max_flights * 0.5, max_flights * 0.75, max_flights],
-    'Label': ['Selten (Grün)', '', 'Mittel', '', 'Häufig (Rot)'],
-    'Farbe': [1, 2, 3, 4, 5]
-})
-
-st.plotly_chart(fig, use_container_width=True)
-st.caption("Hinweis: Nutze die rechte Maustaste (oder Strg + Klick), um die 3D-Ansicht zu drehen und zu kippen.")
-
-st.markdown("---")
-
 # --- HIER WIRD DIE LEGENDE ALS EINFACHER TEXT EINGEFÜGT ---
-# Das gesamte Legenden-Element wird in einen Container verpackt, um Konflikte zu vermeiden.
 with st.container():
     st.subheader("Bedeutung der Flugfarben (Legende)")
 

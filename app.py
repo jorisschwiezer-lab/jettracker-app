@@ -127,7 +127,7 @@ with col_text:
 
 with col_img2:
     st.image("Bild 2.jpeg", caption="Flugzeugtyp: Bombardier Challenger 350")
-    # --- NEU: Aircraft Information unter dem Bild ---
+    # Aircraft Information unter dem Bild
     st.markdown("""
     **Aircraft Information**
     * **Registration:** N350XX
@@ -145,12 +145,9 @@ st.header("📊 Statistische Kennzahlen")
 total_distance = data['Distanz (Meilen)'].sum()
 total_fuel = data['Treibstoffverbrauch (Gallons)'].sum()
 
-# >>> NEU: MEDIAN BERECHNUNG <<<
+# MEDIAN BERECHNUNG
 median_emissions_val = data['Emissionen (Metrische Tonnen)'].median()
-# Wir nutzen weiterhin die 1787t als statisches Gesamtbudget laut deiner Vorgabe
 total_emissions = 1787.0
-# Median-Anzeige zur Kompensation von Ausreißern
-# Da 1787/226 fast genau 7.9 ergibt, setzen wir den Median hier informativ ein
 avg_emissions = total_emissions / total_flights 
 # -----------------------------------------------------------------
 
@@ -166,7 +163,7 @@ c4.metric("Median CO₂ pro Flug", format_de(median_emissions_val, 1))
 st.markdown("---")
 
 
-# --- 4. Interaktive 3D Satelliten-Karte (Gekrümmte Flugbahnen) ---
+# --- 4. Interaktive 3D Satelliten-Karte ---
 st.header("📍 3D Satelliten-Flugrouten")
 
 # Auswahlfunktion für den Zeithorizont
@@ -191,7 +188,6 @@ end_date_filter = pd.to_datetime(time_options[selected_label])
 filtered_map_data = map_data[(map_data['Datum'] >= "2024-01-01") & (map_data['Datum'] <= end_date_filter)]
 
 st.markdown(f"Anzeigte Flüge im Zeitraum **{selected_label}**: **{len(filtered_map_data)}**")
-st.markdown("Farbkodierung: **Grün** (selten) ➡ **Rot** (häufig).")
 
 route_counts = filtered_map_data.groupby(['Abflugort', 'Zielort', 'lat', 'lon', 'Ziel_lat', 'Ziel_lon']).size().reset_index(name='Anzahl_Fluege')
 max_flights = route_counts['Anzahl_Fluege'].max()
@@ -205,14 +201,12 @@ def get_color(value, min_v, max_v):
     yellow_factor = 255 * min(ratio, 1 - ratio) * 2
     return f"rgb({min(255, r + int(yellow_factor/2))}, {min(255, g + int(yellow_factor/2))}, 0)"
 
-# --- NEU: GEKRÜMMTE FLUGBAHNEN (Erdkrümmung) ---
+# GEKRÜMMTE FLUGBAHNEN (Erdkrümmung)
 def create_curved_route(lat1, lon1, lat2, lon2, num_points=50): 
     lats = []
     lons = []
-    # Umrechnung in Radiant
     phi1, lam1 = math.radians(lat1), math.radians(lon1)
     phi2, lam2 = math.radians(lat2), math.radians(lon2)
-    # Berechnung des Winkels zwischen den Punkten
     cos_c = math.sin(phi1)*math.sin(phi2) + math.cos(phi1)*math.cos(phi2)*math.cos(lam2-lam1)
     cos_c = max(-1, min(1, cos_c))
     c = math.acos(cos_c)
@@ -223,7 +217,6 @@ def create_curved_route(lat1, lon1, lat2, lon2, num_points=50):
             lats.append(lat1)
             lons.append(lon1)
             continue
-        # Slerp-Interpolation für Großkreis
         A = math.sin((1-f)*c) / math.sin(c)
         B = math.sin(f*c) / math.sin(c)
         x = A*math.cos(phi1)*math.cos(lam1) + B*math.cos(phi2)*math.cos(lam2)
@@ -289,13 +282,18 @@ st.caption("Hinweis: Nutze die rechte Maustaste (oder Strg + Klick), um die 3D-A
 
 st.markdown("---")
 
-with st.container():
-    st.subheader("Bedeutung der Flugfarben (Legende)")
-    col_leg1, col_leg2, col_leg3, col_leg4 = st.columns(4)
-    with col_leg1: st.markdown("🟢 **Grün:** Seltene Routen")
-    with col_leg2: st.markdown("🟡 **Gelb:** Mittlere Flugdichte")
-    with col_leg3: st.markdown("🟠 **Orange:** Höhere Flugdichte")
-    with col_leg4: st.markdown("🔴 **Rot:** Häufigste Routen")
+# --- NEUE LEGENDE NACH BILDVORLAGE ---
+st.markdown("### Route Density")
+col_l1, col_l2, col_l3 = st.columns(3)
+with col_l1:
+    st.markdown("<div style='background-color: #00ff00; height: 10px; width: 100%; border-radius: 5px;'></div>", unsafe_allow_html=True)
+    st.caption("Low Frequency")
+with col_l2:
+    st.markdown("<div style='background-color: #ffff00; height: 10px; width: 100%; border-radius: 5px;'></div>", unsafe_allow_html=True)
+    st.caption("Medium Frequency")
+with col_l3:
+    st.markdown("<div style='background-color: #ff0000; height: 10px; width: 100%; border-radius: 5px;'></div>", unsafe_allow_html=True)
+    st.caption("High Frequency")
 
 st.markdown("---")
 
@@ -350,23 +348,37 @@ with col_comm_text:
 st.markdown("---")
 
 
-# --- 6. Detaillierte Statistiken ---
+# --- 6. Detaillierte Statistiken (ANGESPASST AN BILDVORLAGE) ---
 st.header("📈 Detaillierte Statistiken")
 col_chart1, col_chart2 = st.columns(2)
 
 with col_chart1:
-    st.subheader("Emissionen pro Monat")
-    original_sum = data['Emissionen (Metrische Tonnen)'].sum()
-    scaling_factor = total_emissions / original_sum if original_sum != 0 else 1
+    st.subheader("Distance per Month (Meilen)")
     data['Monat_Str'] = data['Datum'].dt.strftime('%Y-%m')
-    monthly_stats = data.groupby('Monat_Str')['Emissionen (Metrische Tonnen)'].sum().reset_index()
-    monthly_stats['Emissionen (Metrische Tonnen)'] *= scaling_factor
-    fig_month = px.bar(monthly_stats, x='Monat_Str', y='Emissionen (Metrische Tonnen)', color_continuous_scale='Reds', color='Emissionen (Metrische Tonnen)')
-    st.plotly_chart(fig_month, use_container_width=True)
+    # Aggregieren der Distanz pro Monat
+    dist_monthly = data.groupby('Monat_Str')['Distanz (Meilen)'].sum().reset_index()
+    
+    fig_dist = px.bar(
+        dist_monthly, 
+        x='Monat_Str', 
+        y='Distanz (Meilen)', 
+        color='Distanz (Meilen)',
+        color_continuous_scale=['#2c3e50', '#e74c3c'], # Dunkles Farbschema
+        template="plotly_dark"
+    )
+    fig_dist.update_layout(
+        plot_bgcolor='rgba(0,0,0,0)',
+        paper_bgcolor='rgba(0,0,0,0)',
+        xaxis_title="Month",
+        yaxis_title="Total Distance (Miles)",
+        coloraxis_showscale=False
+    )
+    st.plotly_chart(fig_dist, use_container_width=True)
 
 with col_chart2:
     st.subheader("Top 5 Zielorte")
     top_dest = data['Zielort'].value_counts().head(5).reset_index()
     top_dest.columns = ['Ort', 'Anzahl']
-    fig_top5 = px.bar(top_dest, x='Anzahl', y='Ort', orientation='h', color_continuous_scale='Blues', color='Anzahl')
+    fig_top5 = px.bar(top_dest, x='Anzahl', y='Ort', orientation='h', color='Anzahl', color_continuous_scale='Blues', template="plotly_dark")
+    fig_top5.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)')
     st.plotly_chart(fig_top5, use_container_width=True)

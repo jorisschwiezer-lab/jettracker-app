@@ -154,149 +154,119 @@ c4.metric("Ø CO₂ pro Flug", format_de(avg_emissions, 1))
 st.markdown("---")
 
 
-# --- 4. Interaktive 3D Satelliten-Karte (FINALE VERSION: Gekrümmt, Farbig, Icons) ---
+# --- 4. Interaktive 3D Satelliten-Karte mit Zeit-Horizont Auswahl ---
 st.header("📍 3D Satelliten-Flugrouten")
-st.markdown("Farbkodierung: **Grün** (selten) ➡ **Rot** (häufig). Flugzeug-Icon in der Mitte der Route zeigt die Richtung an.")
 
-# 1. Daten gruppieren
-route_counts = map_data.groupby(['Abflugort', 'Zielort', 'lat', 'lon', 'Ziel_lat', 'Ziel_lon']).size().reset_index(name='Anzahl_Fluege')
+# Auswahlfunktion für den Zeithorizont
+st.subheader("Time horizon")
+time_options = {
+    "1 Month": 30,
+    "3 Months": 90,
+    "6 Months": 180,
+    "1 Year": 365,
+    "All time": 9999
+}
+
+# Auswahlmenü (Pillen-Optik über st.radio horizontal)
+selected_label = st.radio(
+    label="Zeithorizont auswählen:",
+    options=list(time_options.keys()),
+    index=4,  # Standard: All time
+    horizontal=True,
+    label_visibility="collapsed"
+)
+
+# Daten filtern basierend auf dem Zeithorizont
+days_filter = time_options[selected_label]
+latest_date = map_data['Datum'].max()
+cutoff_date = latest_date - pd.Timedelta(days=days_filter)
+filtered_map_data = map_data[map_data['Datum'] >= cutoff_date]
+
+st.markdown(f"Anzeigte Flüge im Zeitraum **{selected_label}**: **{len(filtered_map_data)}**")
+st.markdown("Farbkodierung: **Grün** (selten) ➡ **Rot** (häufig).")
+
+# 1. Daten gruppieren für die Karte
+route_counts = filtered_map_data.groupby(['Abflugort', 'Zielort', 'lat', 'lon', 'Ziel_lat', 'Ziel_lon']).size().reset_index(name='Anzahl_Fluege')
 
 # Maximalwert für die Farberechnung finden
 max_flights = route_counts['Anzahl_Fluege'].max()
 min_flights = route_counts['Anzahl_Fluege'].min()
 
-# Hilfsfunktion für Farben (Grün -> Gelb -> Rot)
+# Hilfsfunktionen für die Kartendarstellung
 def get_color(value, min_v, max_v):
     if max_v == min_v: return "rgb(0, 255, 0)" 
     ratio = (value - min_v) / (max_v - min_v)
     r = int(255 * ratio)
     g = int(255 * (1 - ratio))
     yellow_factor = 255 * min(ratio, 1 - ratio) * 2
-    b = 0
-    return f"rgb({min(255, r + int(yellow_factor/2))}, {min(255, g + int(yellow_factor/2))}, {b})"
+    return f"rgb({min(255, r + int(yellow_factor/2))}, {min(255, g + int(yellow_factor/2))}, 0)"
 
-
-# Hilfsfunktion für "gekrümmte" Linien (Simulation)
 def create_curved_route(lat1, lon1, lat2, lon2, num_points=50): 
     lats = []
     lons = []
-    
     for i in range(num_points + 1):
         f = i / num_points
         lats.append(lat1 + (lat2 - lat1) * f)
         lons.append(lon1 + (lon2 - lon1) * f)
-        
     return lats, lons
 
-# Hilfsfunktion für Flugzeug-Winkel (Bearing)
 def calculate_bearing(lat1, lon1, lat2, lon2):
     lat1_rad, lon1_rad = math.radians(lat1), math.radians(lon1)
     lat2_rad, lon2_rad = math.radians(lat2), math.radians(lon2)
-
     dLon = (lon2_rad - lon1_rad)
-    
     y = math.sin(dLon) * math.cos(lat2_rad)
-    x = math.cos(lat1_rad) * math.sin(lat2_rad) - \
-        math.sin(lat1_rad) * math.cos(lat2_rad) * math.cos(dLon)
-        
-    brng = math.atan2(y, x)
-    brng = math.degrees(brng)
-    return (brng + 360) % 360
+    x = math.cos(lat1_rad) * math.sin(lat2_rad) - math.sin(lat1_rad) * math.cos(lat2_rad) * math.cos(dLon)
+    return (math.degrees(math.atan2(y, x)) + 360) % 360
 
-# Figur erstellen und konfigurieren
+# Figur erstellen
 fig = go.Figure()
 
-# 2. Linien und Flugzeuge zeichnen
+# Linien und Flugzeuge zeichnen
 for index, row in route_counts.iterrows():
-    # Farbe bestimmen (Grün -> Rot)
     line_color = get_color(row['Anzahl_Fluege'], min_flights, max_flights)
+    path_lats, path_lons = create_curved_route(row['lat'], row['lon'], row['Ziel_lat'], row['Ziel_lon'])
     
-    # Koordinaten
-    start_lat, start_lon = row['lat'], row['lon']
-    end_lat, end_lon = row['Ziel_lat'], row['Ziel_lon']
-    
-    # Krümmung berechnen (Simulation durch 50 Segmente)
-    path_lats, path_lons = create_curved_route(start_lat, start_lon, end_lat, end_lon)
-    
-    # A) Die LINIE zeichnen (dünn & farbig)
-    line_width = 1.5 
-    hover_text = f"{row['Abflugort']} -> {row['Zielort']}<br>Anzahl: {row['Anzahl_Fluege']}"
+    # Die LINIE
     fig.add_trace(go.Scattermapbox(
         mode="lines",
-        lon=path_lons,
-        lat=path_lats,
-        line=dict(width=line_width, color=line_color), 
+        lon=path_lons, lat=path_lats,
+        line=dict(width=1.5, color=line_color),
         hoverinfo='text',
-        text=hover_text,
-        opacity=0.8,
-        showlegend=False
+        text=f"{row['Abflugort']} -> {row['Zielort']}<br>Anzahl: {row['Anzahl_Fluege']}",
+        opacity=0.8, showlegend=False
     ))
 
-    # B) Das FLUGZEUG in der Mitte zeichnen
-    mid_index = len(path_lats) // 2
-    mid_lat = path_lats[mid_index]
-    mid_lon = path_lons[mid_index]
-    
-    # Winkel berechnen
-    bearing = calculate_bearing(start_lat, start_lon, end_lat, end_lon)
-
+    # Das FLUGZEUG
+    mid_idx = len(path_lats) // 2
+    bearing = calculate_bearing(row['lat'], row['lon'], row['Ziel_lat'], row['Ziel_lon'])
     fig.add_trace(go.Scattermapbox(
         mode="markers",
-        lon=[mid_lon],
-        lat=[mid_lat],
-        marker=dict(
-            symbol='airport', 
-            size=20,          
-            color='black',    
-            angle=bearing     
-        ),
-        hoverinfo='skip',
-        showlegend=False
+        lon=[path_lons[mid_idx]], lat=[path_lats[mid_idx]],
+        marker=dict(symbol='airport', size=20, color='black', angle=bearing),
+        hoverinfo='skip', showlegend=False
     ))
 
-# 3. Flughäfen als Punkte hinzufügen (Dunkelblau)
-all_lons = list(map_data['lon']) + list(map_data['Ziel_lon'])
-all_lats = list(map_data['lat']) + list(map_data['Ziel_lat'])
-all_texts = list(map_data['Abflugort']) + list(map_data['Zielort'])
+# Flughäfen als Punkte
+all_lons = list(filtered_map_data['lon']) + list(filtered_map_data['Ziel_lon'])
+all_lats = list(filtered_map_data['lat']) + list(filtered_map_data['Ziel_lat'])
+all_texts = list(filtered_map_data['Abflugort']) + list(filtered_map_data['Zielort'])
 
 fig.add_trace(go.Scattermapbox(
     mode="markers",
-    lon=all_lons,
-    lat=all_lats,
-    marker=dict(size=6, color='#00008B'), 
-    hoverinfo='text',
-    text=all_texts,
-    name='Flughäfen',
-    showlegend=False 
+    lon=all_lons, lat=all_lats,
+    marker=dict(size=6, color='#00008B'),
+    hoverinfo='text', text=all_texts, showlegend=False 
 ))
 
-# 4. Kartenlayout: Satellit + 3D Neigung
 fig.update_layout(
-    margin={"r":0,"t":0,"l":0,"b":0},
-    height=700,
-    showlegend=False,
+    margin={"r":0,"t":0,"l":0,"b":0}, height=700,
     mapbox=dict(
-        style="white-bg", 
+        style="white-bg",
         layers=[
-            {
-                "below": 'traces',
-                "sourcetype": "raster",
-                "source": [
-                    "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
-                ]
-            },
-            {
-                "below": 'traces',
-                "sourcetype": "raster",
-                "source": [
-                    "https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}"
-                ]
-            }
+            {"below": 'traces', "sourcetype": "raster", "source": ["https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"]},
+            {"below": 'traces', "sourcetype": "raster", "source": ["https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}"]}
         ],
-        center=dict(lat=30, lon=-80), 
-        zoom=3.5,
-        pitch=45, 
-        bearing=0
+        center=dict(lat=30, lon=-80), zoom=3.5, pitch=45
     )
 )
 
@@ -305,161 +275,59 @@ st.caption("Hinweis: Nutze die rechte Maustaste (oder Strg + Klick), um die 3D-A
 
 st.markdown("---")
 
-# --- HIER WIRD DIE LEGENDE ALS EINFACHER TEXT EINGEFÜGT ---
+# --- LEGENDE ---
 with st.container():
     st.subheader("Bedeutung der Flugfarben (Legende)")
-
     col_leg1, col_leg2, col_leg3, col_leg4 = st.columns(4)
-
-    with col_leg1:
-        st.markdown("🟢 **Grün:** Seltene Routen (Niedrige Flugdichte)")
-    with col_leg2:
-        st.markdown("🟡 **Gelb:** Mittlere Flugdichte")
-    with col_leg3:
-        st.markdown("🟠 **Orange:** Höhere Flugdichte")
-    with col_leg4:
-        st.markdown("🔴 **Rot:** Häufigste Routen (Höchste Flugdichte)")
+    with col_leg1: st.markdown("🟢 **Grün:** Seltene Routen")
+    with col_leg2: st.markdown("🟡 **Gelb:** Mittlere Dichte")
+    with col_leg3: st.markdown("🟠 **Orange:** Höhere Dichte")
+    with col_leg4: st.markdown("🔴 **Rot:** Häufigste Routen")
 
 st.markdown("---")
-
 
 # --- 5. CO2-Kompensation (Interaktiver Baumvergleich) ---
 st.header("🌳 CO₂-Kompensation (Privatjet)") 
 
-# Gesamtwerte
 max_emissions = total_emissions
 max_trees = max_emissions / CO2_PER_TREE_TONS_ANNUALLY
 
-
-# --- INTERAKTIVER SLIDER ---
 st.subheader("Simuliere die benötigten Bäume in Abhängigkeit der Flüge (Privatjet)")
-
-flights_to_analyze = st.slider(
-    'Anzahl der Flüge, die simuliert werden sollen:',
-    min_value=1, 
-    max_value=total_flights,
-    value=total_flights, 
-    step=1
-)
+flights_to_analyze = st.slider('Anzahl der Flüge:', 1, total_flights, total_flights)
 
 current_emissions = flights_to_analyze * avg_emissions
 current_trees = current_emissions / CO2_PER_TREE_TONS_ANNUALLY
 
-current_emissions_formatted = format_de(current_emissions, 2)
-current_trees_formatted = format_de(current_trees, 0)
-
-
-# --- Visuelle Darstellung ---
-min_font_size = 35 
-max_font_size = 110 
-if total_flights > 1:
-    tree_scale = (flights_to_analyze / total_flights)
-else:
-    tree_scale = 1 
-
-font_size_px = int(min_font_size + (max_font_size - min_font_size) * tree_scale)
-
+font_size_px = int(35 + (110 - 35) * (flights_to_analyze / total_flights))
 
 col_tree_icon, col_tree_text = st.columns([1, 4])
-
 with col_tree_icon:
-    # Baumsymbol (Laubbaum) mit dynamischer Größe über HTML/CSS
-    st.markdown(
-        f"""
-        <div style="
-            text-align: center; 
-            margin-top: 10px; 
-            margin-bottom: 10px;">
-            <span style='font-size: {font_size_px}px;'>🌳</span>
-        </div>
-        """, 
-        unsafe_allow_html=True
-    )
+    st.markdown(f"<div style='text-align: center;'><span style='font-size: {font_size_px}px;'>🌳</span></div>", unsafe_allow_html=True)
 
 with col_tree_text:
-    st.markdown(f"""
-    Bei **{flights_to_analyze} Privatjet-Flügen** entstehen Emissionen von **{current_emissions_formatted} Tonnen CO₂**.
-    
-    Um diese Emissionen im Laufe eines Jahres auszugleichen, müssten **{current_trees_formatted} Bäume** neu gepflanzt werden.
-    
-    *(Basierend auf einem Durchschnittswert von 0.022 Tonnen CO₂-Aufnahme pro Baum und Jahr)*
-    """)
-
-# --- OPTIONALE HINWEISZEILE FÜR DEN MAXIMALWERT ---
-if flights_to_analyze < total_flights:
-    st.info(f"Der Gesamt-Fußabdruck (bei {total_flights} Flügen) beträgt {format_de(max_emissions, 2)} Tonnen CO₂ und erfordert {format_de(max_trees, 0)} Bäume.")
+    st.markdown(f"Bei **{flights_to_analyze} Privatjet-Flügen** entstehen **{format_de(current_emissions, 2)} Tonnen CO₂**.")
+    st.markdown(f"Kompensation nötig: **{format_de(current_trees, 0)} Bäume**.")
 
 st.markdown("---")
 
-
-# --- 5.5 KOMMERZIELLER VERGLEICH (NEU) ---
+# --- 5.5 KOMMERZIELLER VERGLEICH ---
 st.header("✈️ Vergleich: Kommerzieller Flug")
+COMMERCIAL_FACTOR = 0.10
+st.markdown(f"**Annahme:** Kommerzieller Anteil beträgt nur **{int(COMMERCIAL_FACTOR * 100)}%** der Privatjet-Emissionen.")
 
-# NEUE BERECHNUNGSBASIS
-COMMERCIAL_FACTOR = 0.10 # 10% der Privatjet-Emissionen
-commercial_total_emissions = total_emissions * COMMERCIAL_FACTOR
-commercial_avg_emissions = commercial_total_emissions / total_flights
-
-st.markdown(f"""
-**Annahme:** Wir gehen davon aus, dass bei einem Flug in einem kommerziellen Flugzeug (ca. 150 Passagiere)
-Tom Cruises anteilige CO₂-Emissionen nur **{format_de(COMMERCIAL_FACTOR * 100, 0)}%** der Emissionen des Privatjets betragen.
-""")
-
-
-# --- INTERAKTIVER SLIDER (Kommerziell) ---
-
-flights_to_analyze_comm = st.slider(
-    'Anzahl der Flüge, die kommerziell simuliert werden sollen:',
-    min_value=1, 
-    max_value=total_flights,
-    value=total_flights,
-    step=1,
-    key='commercial_slider' # Eindeutige ID für Streamlit-Slider
-)
-
-current_emissions_comm = flights_to_analyze_comm * commercial_avg_emissions
+flights_to_analyze_comm = st.slider('Flüge kommerziell simulieren:', 1, total_flights, total_flights, key='commercial_slider')
+current_emissions_comm = flights_to_analyze_comm * (avg_emissions * COMMERCIAL_FACTOR)
 current_trees_comm = current_emissions_comm / CO2_PER_TREE_TONS_ANNUALLY
-
-current_emissions_formatted_comm = format_de(current_emissions_comm, 2)
-current_trees_formatted_comm = format_de(current_trees_comm, 0)
-
-# 1. Berechnung der visuellen Baumgröße (skaliert)
-min_font_size_comm = 35  
-max_font_size_comm = 110 
-if total_flights > 1:
-    tree_scale_comm = (flights_to_analyze_comm / total_flights)
-else:
-    tree_scale_comm = 1 
-
-font_size_px_comm = int(min_font_size_comm + (max_font_size_comm - min_font_size_comm) * tree_scale_comm)
+font_size_px_comm = int(35 + (110 - 35) * (flights_to_analyze_comm / total_flights))
 
 col_comm_icon, col_comm_text = st.columns([1, 4])
-
 with col_comm_icon:
-    # Baumsymbol (Laubbaum) mit dynamischer Größe
-    st.markdown(
-        f"""
-        <div style="
-            text-align: center; 
-            margin-top: 10px; 
-            margin-bottom: 10px;">
-            <span style='font-size: {font_size_px_comm}px;'>🌳</span>
-        </div>
-        """, 
-        unsafe_allow_html=True
-    ) 
-
+    st.markdown(f"<div style='text-align: center;'><span style='font-size: {font_size_px_comm}px;'>🌳</span></div>", unsafe_allow_html=True)
 with col_comm_text:
-    st.markdown(f"""
-    Bei **{flights_to_analyze_comm} Flügen** in der kommerziellen Klasse (Tom Cruises Anteil) entstehen nur **{current_emissions_formatted_comm} Tonnen CO₂**.
-    
-    Dies würde nur **{current_trees_formatted_comm} Bäume** für den Ausgleich erfordern.
-    
-    *Differenz im CO₂-Ausstoß (Privatjet vs. Kommerziell): **{format_de(current_emissions - current_emissions_comm, 2)} Tonnen**.*
-    """)
+    st.markdown(f"Bei **{flights_to_analyze_comm} Flügen** kommerziell entstehen nur **{format_de(current_emissions_comm, 2)} Tonnen CO₂**.")
+    st.markdown(f"Kompensation nötig: **{format_de(current_trees_comm, 0)} Bäume**.")
 
 st.markdown("---")
-
 
 # --- 6. Detaillierte Statistiken ---
 st.header("📈 Detaillierte Statistiken")
@@ -467,39 +335,17 @@ col_chart1, col_chart2 = st.columns(2)
 
 with col_chart1:
     st.subheader("Emissionen pro Monat")
-    
-    # Skalierungsfaktor zur Anpassung der Monatsdaten an 1787 Tonnen
     original_sum = data['Emissionen (Metrische Tonnen)'].sum()
     scaling_factor = total_emissions / original_sum if original_sum != 0 else 1
-    
     data['Monat_Str'] = data['Datum'].dt.strftime('%Y-%m')
     monthly_stats = data.groupby('Monat_Str')['Emissionen (Metrische Tonnen)'].sum().reset_index()
-    monthly_stats['Emissionen (Metrische Tonnen)'] = monthly_stats['Emissionen (Metrische Tonnen)'] * scaling_factor
-    
-    fig_month = px.bar(
-        monthly_stats, 
-        x='Monat_Str', 
-        y='Emissionen (Metrische Tonnen)',
-        labels={'Monat_Str': 'Monat', 'Emissionen (Metrische Tonnen)': 'CO₂ (Tonnen)'},
-        color='Emissionen (Metrische Tonnen)',
-        color_continuous_scale='Reds'
-    )
+    monthly_stats['Emissionen (Metrische Tonnen)'] *= scaling_factor
+    fig_month = px.bar(monthly_stats, x='Monat_Str', y='Emissionen (Metrische Tonnen)', color='Emissionen (Metrische Tonnen)', color_continuous_scale='Reds')
     st.plotly_chart(fig_month, use_container_width=True)
 
 with col_chart2:
     st.subheader("Top 5 Zielorte")
     top_dest = data['Zielort'].value_counts().head(5).reset_index()
     top_dest.columns = ['Ort', 'Anzahl']
-    top_dest['Label'] = top_dest['Ort'].apply(lambda x: x.split('(')[0][:20] + "..." if len(x) > 20 else x)
-    
-    fig_top5 = px.bar(
-        top_dest,
-        x='Anzahl',
-        y='Label',
-        orientation='h', 
-        labels={'Label': 'Flughafen', 'Anzahl': 'Anzahl Landungen'},
-        color='Anzahl',
-        color_continuous_scale='Blues'
-    )
-    fig_top5.update_layout(yaxis={'categoryorder':'total ascending'})
+    fig_top5 = px.bar(top_dest, x='Anzahl', y='Ort', orientation='h', color='Anzahl', color_continuous_scale='Blues')
     st.plotly_chart(fig_top5, use_container_width=True)

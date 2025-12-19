@@ -18,6 +18,7 @@ CO2_INGOLSTADT_ANNUAL_TONS = 1800000
 # WICHTIG: KONSTANTE FÜR BAUMVERGLEICH
 CO2_PER_TREE_TONS_ANNUALLY = 0.022 # 22 kg CO2 pro Baum und Jahr (Durchschnittswert)
 
+
 # Dictionary mit den geokodierten Koordinaten
 AIRPORT_COORDINATES = {
     'FXE': (26.197, -80.174), 'VNY': (34.209, -118.490), 'SUA': (27.247, -80.244),
@@ -61,35 +62,47 @@ AIRPORT_COORDINATES = {
     'SFO': (37.619, -122.375)
 }
 
-# Hilfsfunktionen
+# Funktion zum Extrahieren des Airport-Codes
 def extract_airport_code(location_str):
     if not isinstance(location_str, str): return None
     match = re.search(r'\(([^)]+)\)', str(location_str))
     return match.group(1).split()[-1] if match else None
 
+# Funktion zum Laden und Vorbereiten der Daten
 @st.cache_data
 def load_data(file_path):
     df = pd.read_csv(file_path)
+
+    # Datenbereinigung und Typkonvertierung
     df['Datum'] = pd.to_datetime(df['Datum'], format='%d.%m.%Y', errors='coerce')
     df.dropna(subset=['Datum'], inplace=True)
     df.sort_values(by='Datum', inplace=True)
+
     cols_to_clean = ['Distanz (Meilen)', 'Treibstoffverbrauch (Gallons)', 'Emissionen (Metrische Tonnen)']
     for col in cols_to_clean:
         if df[col].dtype == object:
             df[col] = df[col].astype(str).str.replace(',', '').astype(float)
+
     df['Flugnummer'] = np.arange(1, len(df) + 1)
+
+    # GEOKODIERUNG
     df['Abflug_Code'] = df['Abflugort'].apply(extract_airport_code)
     df['Ziel_Code'] = df['Zielort'].apply(extract_airport_code)
+
     df['lat'] = df['Abflug_Code'].apply(lambda x: AIRPORT_COORDINATES.get(x, (None, None))[0])
     df['lon'] = df['Abflug_Code'].apply(lambda x: AIRPORT_COORDINATES.get(x, (None, None))[1])
     df['Ziel_lat'] = df['Ziel_Code'].apply(lambda x: AIRPORT_COORDINATES.get(x, (None, None))[0])
     df['Ziel_lon'] = df['Ziel_Code'].apply(lambda x: AIRPORT_COORDINATES.get(x, (None, None))[1])
+    
     return df
 
+# Daten laden
 try:
     data = load_data(CSV_FILE)
     total_flights = len(data)
+    # Entferne Zeilen ohne Koordinaten für die Karte
     map_data = data.dropna(subset=['lat', 'lon', 'Ziel_lat', 'Ziel_lon'])
+    
     if map_data.empty:
         st.error("FEHLER: Keine gültigen Koordinaten gefunden.")
         st.stop()
@@ -98,17 +111,23 @@ except FileNotFoundError:
     st.error(f"FEHLER: Datei '{CSV_FILE}' nicht gefunden.")
     st.stop()
 
+
 # --- 2. Seitentitel und Bilder ---
 st.title("Privatjet Tracker Tom Cruise")
+
 col_img1, col_text, col_img2 = st.columns([1, 2, 1])
+
 with col_img1:
     st.image("image-w856.jpg.webp", caption="Berühmtheit: Tom Cruise")
+
 with col_text:
     st.header(f"Analyse der Flugbewegungen 2024")
     st.markdown(f"Analysiert **{total_flights}** Flüge von N350XX im Jahr 2024.")
     st.markdown("---")
+
 with col_img2:
     st.image("Bild 2.jpeg", caption="Flugzeugtyp: Bombardier Challenger 350")
+    # Aircraft Information unter dem Bild
     st.markdown("""
     **Aircraft Information**
     * **Registration:** N350XX
@@ -119,12 +138,19 @@ with col_img2:
 
 st.markdown("---")
 
+
 # --- 3. Statistische Kennzahlen (KPIs) ---
 st.header("📊 Statistische Kennzahlen")
+
 total_distance = data['Distanz (Meilen)'].sum()
+total_fuel = data['Treibstoffverbrauch (Gallons)'].sum()
+
+# MEDIAN BERECHNUNG
 median_emissions_val = data['Emissionen (Metrische Tonnen)'].median()
+# Wir nutzen weiterhin die 1787t als statisches Gesamtbudget laut deiner Vorgabe
 total_emissions = 1787.0
 avg_emissions = total_emissions / total_flights 
+# -----------------------------------------------------------------
 
 def format_de(number, decimals=0):
     return f"{number:,.{decimals}f}".replace(",", "|").replace(".", ",").replace("|", ".")
@@ -137,18 +163,32 @@ c4.metric("Median CO₂ pro Flug", format_de(median_emissions_val, 1))
 
 st.markdown("---")
 
+
 # --- 4. Interaktive 3D Satelliten-Karte ---
 st.header("📍 3D Satelliten-Flugrouten")
+
+# Auswahlfunktion für den Zeithorizont
 st.subheader("Time horizon")
-time_options = {"1 Monat (Jan)": "2024-01-31", "3 Monate (Jan-Mär)": "2024-03-31", "6 Monate (Jan-Jun)": "2024-06-30", "9 Monate (Jan-Sep)": "2024-09-30", "1 Jahr (Gesamt)": "2024-12-31"}
-selected_label = st.radio(label="Zeithorizont auswählen:", options=list(time_options.keys()), index=4, horizontal=True, label_visibility="collapsed")
+time_options = {
+    "1 Monat (Jan)": "2024-01-31",
+    "3 Monate (Jan-Mär)": "2024-03-31",
+    "6 Monate (Jan-Jun)": "2024-06-30",
+    "9 Monate (Jan-Sep)": "2024-09-30",
+    "1 Jahr (Gesamt)": "2024-12-31"
+}
+
+selected_label = st.radio(
+    label="Zeithorizont auswählen:",
+    options=list(time_options.keys()),
+    index=4, 
+    horizontal=True,
+    label_visibility="collapsed"
+)
+
 end_date_filter = pd.to_datetime(time_options[selected_label])
 filtered_map_data = map_data[(map_data['Datum'] >= "2024-01-01") & (map_data['Datum'] <= end_date_filter)]
 
-# Layout: Info-Panel links, Karte rechts
-info_col, main_map_col = st.columns([1, 2.5])
-
-# Gruppierung für Karte
+# Gruppierung für die Karte
 route_counts = filtered_map_data.groupby(['Abflugort', 'Zielort', 'Abflug_Code', 'Ziel_Code', 'lat', 'lon', 'Ziel_lat', 'Ziel_lon']).size().reset_index(name='Anzahl_Fluege')
 max_flights = route_counts['Anzahl_Fluege'].max()
 min_flights = route_counts['Anzahl_Fluege'].min()
@@ -156,32 +196,46 @@ min_flights = route_counts['Anzahl_Fluege'].min()
 def get_color(value, min_v, max_v):
     if max_v == min_v: return "rgb(0, 255, 0)" 
     ratio = (value - min_v) / (max_v - min_v)
-    r = int(255 * ratio); g = int(255 * (1 - ratio)); yellow = 255 * min(ratio, 1 - ratio) * 2
-    return f"rgb({min(255, r + int(yellow/2))}, {min(255, g + int(yellow/2))}, 0)"
+    r = int(255 * ratio)
+    g = int(255 * (1 - ratio))
+    yellow_factor = 255 * min(ratio, 1 - ratio) * 2
+    return f"rgb({min(255, r + int(yellow_factor/2))}, {min(255, g + int(yellow_factor/2))}, 0)"
 
+# GEKRÜMMTE FLUGBAHNEN (Erdkrümmung)
 def create_curved_route(lat1, lon1, lat2, lon2, num_points=50): 
-    lats, lons = [], []
-    phi1, lam1, phi2, lam2 = map(math.radians, [lat1, lon1, lat2, lon2])
+    lats = []
+    lons = []
+    phi1, lam1 = math.radians(lat1), math.radians(lon1)
+    phi2, lam2 = math.radians(lat2), math.radians(lon2)
     cos_c = math.sin(phi1)*math.sin(phi2) + math.cos(phi1)*math.cos(phi2)*math.cos(lam2-lam1)
-    cos_c = max(-1, min(1, cos_c)); c = math.acos(cos_c)
+    cos_c = max(-1, min(1, cos_c))
+    c = math.acos(cos_c)
+    
     for i in range(num_points + 1):
         f = i / num_points
-        if c == 0: lats.append(lat1); lons.append(lon1); continue
-        A = math.sin((1-f)*c)/math.sin(c); B = math.sin(f*c)/math.sin(c)
+        if c == 0:
+            lats.append(lat1); lons.append(lon1)
+            continue
+        A = math.sin((1-f)*c) / math.sin(c)
+        B = math.sin(f*c) / math.sin(c)
         x = A*math.cos(phi1)*math.cos(lam1) + B*math.cos(phi2)*math.cos(lam2)
         y = A*math.cos(phi1)*math.sin(lam1) + B*math.cos(phi2)*math.sin(lam2)
         z = A*math.sin(phi1) + B*math.sin(phi2)
-        lats.append(math.degrees(math.atan2(z, math.sqrt(x**2+y**2)))); lons.append(math.degrees(math.atan2(y, x)))
+        lats.append(math.degrees(math.atan2(z, math.sqrt(x**2+y**2))))
+        lons.append(math.degrees(math.atan2(y, x)))
     return lats, lons
 
 def calculate_bearing(lat1, lon1, lat2, lon2):
-    l1, lo1, l2, lo2 = map(math.radians, [lat1, lon1, lat2, lon2])
-    y = math.sin(lo2 - lo1) * math.cos(l2); x = math.cos(l1) * math.sin(l2) - math.sin(l1) * math.cos(l2) * math.cos(lo2 - lo1)
+    lat1_rad, lon1_rad = math.radians(lat1), math.radians(lon1)
+    lat2_rad, lon2_rad = math.radians(lat2), math.radians(lon2)
+    dLon = (lon2_rad - lon1_rad)
+    y = math.sin(dLon) * math.cos(lat2_rad)
+    x = math.cos(lat1_rad) * math.sin(lat2_rad) - math.sin(lat1_rad) * math.cos(lat2_rad) * math.cos(dLon)
     return (math.degrees(math.atan2(y, x)) + 360) % 360
 
 fig = go.Figure()
 
-# 1. Blaue Flughafen-Punkte (Wieder hinzugefügt)
+# 1. BLAUE FLUGHAFEN PUNKTE
 all_lons = list(filtered_map_data['lon']) + list(filtered_map_data['Ziel_lon'])
 all_lats = list(filtered_map_data['lat']) + list(filtered_map_data['Ziel_lat'])
 all_texts = list(filtered_map_data['Abflugort']) + list(filtered_map_data['Zielort'])
@@ -192,116 +246,134 @@ fig.add_trace(go.Scattermapbox(
     hoverinfo='text', text=all_texts, name='Flughäfen', showlegend=False 
 ))
 
-# 2. Linien und Gelbe Flugzeuge
+# 2. FLUGROUTEN & GELBE FLUGZEUGE
 for index, row in route_counts.iterrows():
     line_color = get_color(row['Anzahl_Fluege'], min_flights, max_flights)
     path_lats, path_lons = create_curved_route(row['lat'], row['lon'], row['Ziel_lat'], row['Ziel_lon'])
     
-    # Route
+    # Route zeichnen
     fig.add_trace(go.Scattermapbox(
         mode="lines", lon=path_lons, lat=path_lats,
-        line=dict(width=1.5, color=line_color), hoverinfo='skip', opacity=0.8, showlegend=False
+        line=dict(width=1.5, color=line_color), 
+        hoverinfo='skip', opacity=0.8, showlegend=False
     ))
 
-    # Gelbes Flugzeug-Icon
+    # Gelbes Flugzeug Icon (Massiv vergrößert für Sichtbarkeit)
     mid_idx = len(path_lats) // 2
     bearing = calculate_bearing(row['lat'], row['lon'], row['Ziel_lat'], row['Ziel_lon'])
+    
+    # Flightradar Style Pop-up Text (HTML Layout im Hover)
+    fr_popup_html = (
+        f"<b>Aircraft: N350XX</b><br>"
+        f"Type: Bombardier Challenger 350<br>"
+        f"━━━━━━━━━━━━━━━<br>"
+        f"<b>{row['Abflug_Code']} ➔ {row['Ziel_Code']}</b><br>"
+        f"From: {row['Abflugort']}<br>"
+        f"To: {row['Zielort']}<br>"
+        f"━━━━━━━━━━━━━━━<br>"
+        f"Route Frequency: {row['Anzahl_Fluege']} flights"
+    )
+
     fig.add_trace(go.Scattermapbox(
         mode="markers", lon=[path_lons[mid_idx]], lat=[path_lats[mid_idx]],
-        marker=dict(symbol='airport', size=18, color='#FFFF00', angle=bearing),
-        customdata=[[row['Abflug_Code'], row['Ziel_Code'], row['Abflugort'], row['Zielort'], row['Anzahl_Fluege']]],
-        hoverinfo='text', text=f"Klicke für Details: {row['Abflug_Code']} -> {row['Ziel_Code']}",
+        marker=dict(symbol='triangle', size=25, color='#FFFF00', angle=bearing),
+        text=fr_popup_html,
+        hoverinfo='text',
         name="Aircraft", showlegend=False
     ))
 
 fig.update_layout(
-    margin={"r":0,"t":0,"l":0,"b":0}, height=700,
+    margin={"r":0,"t":0,"l":0,"b":0}, height=800,
     mapbox=dict(
         style="white-bg", 
-        layers=[{"below": 'traces', "sourcetype": "raster", "source": ["https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"]}],
-        center=dict(lat=30, lon=-80), zoom=3.5, pitch=45
-    ),
-    clickmode='event+select'
+        layers=[
+            {"below": 'traces', "sourcetype": "raster", "source": ["https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"]},
+            {"below": 'traces', "sourcetype": "raster", "source": ["https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}"]}
+        ],
+        center=dict(lat=30, lon=-80), zoom=3.5, pitch=45, bearing=0
+    )
 )
 
-with main_map_col:
-    selection = st.plotly_chart(fig, use_container_width=True, on_select="rerun")
-
-with info_col:
-    st.subheader("🛩️ Flight Details")
-    if selection and "selection" in selection and len(selection["selection"]["points"]) > 0:
-        point = selection["selection"]["points"][0]
-        cdata = point.get("customdata")
-        if cdata:
-            st.image("Bild 2.jpeg", use_container_width=True)
-            st.markdown(f"### {cdata[0]} ➔ {cdata[1]}")
-            st.caption(f"{cdata[2]} nach {cdata[3]}")
-            st.markdown("---")
-            col_a, col_b = st.columns(2)
-            with col_a:
-                st.write("**AIRCRAFT**")
-                st.write("Bombardier CL350")
-            with col_b:
-                st.write("**REGISTRATION**")
-                st.write("N350XX")
-            st.markdown("---")
-            st.info(f"Frequenz auf dieser Route: {cdata[4]} Flüge")
-    else:
-        st.info("Klicke auf ein gelbes Flugzeug, um die Flightradar-Details anzuzeigen.")
+st.plotly_chart(fig, use_container_width=True)
 
 st.markdown("---")
 
-# --- LEGENDE ---
 with st.container():
     st.subheader("Bedeutung der Flugfarben (Legende)")
-    cl1, cl2, cl3, cl4 = st.columns(4)
-    with cl1: st.markdown("🟢 **Grün:** Seltene Routen")
-    with cl2: st.markdown("🟡 **Gelb:** Mittlere Flugdichte")
-    with cl3: st.markdown("🟠 **Orange:** Höhere Flugdichte")
-    with cl4: st.markdown("🔴 **Rot:** Häufigste Routen")
+    col_leg1, col_leg2, col_leg3, col_leg4 = st.columns(4)
+    with col_leg1: st.markdown("🟢 **Grün:** Seltene Routen")
+    with col_leg2: st.markdown("🟡 **Gelb:** Mittlere Flugdichte")
+    with col_leg3: st.markdown("🟠 **Orange:** Höhere Flugdichte")
+    with col_leg4: st.markdown("🔴 **Rot:** Häufigste Routen")
 
 st.markdown("---")
+
 
 # --- 5. CO2-Kompensation (Interaktiver Baumvergleich) ---
 st.header("🌳 CO₂-Kompensation (Privatjet)") 
-flights_to_analyze = st.slider('Anzahl der Flüge simulieren:', 1, total_flights, total_flights)
+
+flights_to_analyze = st.slider(
+    'Anzahl der Flüge, die simuliert werden sollen:',
+    min_value=1, max_value=total_flights, value=total_flights, step=1
+)
+
 current_emissions = flights_to_analyze * avg_emissions
 current_trees = current_emissions / CO2_PER_TREE_TONS_ANNUALLY
-f_size = int(35 + (110 - 35) * (flights_to_analyze / total_flights))
+font_size_px = int(35 + (110 - 35) * (flights_to_analyze / total_flights))
 
 col_tree_icon, col_tree_text = st.columns([1, 4])
 with col_tree_icon:
-    st.markdown(f"<div style='text-align: center;'><span style='font-size: {f_size}px;'>🌳</span></div>", unsafe_allow_html=True)
+    st.markdown(f"<div style='text-align: center;'><span style='font-size: {font_size_px}px;'>🌳</span></div>", unsafe_allow_html=True)
+
 with col_tree_text:
-    st.markdown(f"Bei **{flights_to_analyze} Privatjet-Flügen** entstehen **{format_de(current_emissions, 2)} Tonnen CO₂**.")
-    st.markdown(f"Kompensation nötig: **{format_de(current_trees, 0)} Bäume**.")
+    st.markdown(f"Bei **{flights_to_analyze} Privatjet-Flügen** entstehen Emissionen von **{format_de(current_emissions, 2)} Tonnen CO₂**.")
+    st.markdown(f"Um diese Emissionen auszugleichen, müssten **{format_de(current_trees, 0)} Bäume** neu gepflanzt werden.")
 
 st.markdown("---")
 
-# --- 5.5 KOMMERZIELLER VERGLEICH ---
+
+# --- 5.5 KOMMERZIELLER VERGLEICH & BUSINESS-METRIK ---
 st.header("✈️ Vergleich: Kommerzieller Flug")
 COMMERCIAL_FACTOR = 0.10 
-flights_to_analyze_comm = st.slider('Flüge kommerziell simulieren:', 1, total_flights, total_flights, key='commercial_slider')
+
+flights_to_analyze_comm = st.slider(
+    'Anzahl der Flüge, die kommerziell simuliert werden sollen:',
+    min_value=1, max_value=total_flights, value=total_flights, step=1, key='commercial_slider'
+)
+
 current_emissions_comm = flights_to_analyze_comm * (avg_emissions * COMMERCIAL_FACTOR)
 current_trees_comm = current_emissions_comm / CO2_PER_TREE_TONS_ANNUALLY
+times_business_val = int(1 / COMMERCIAL_FACTOR)
+
 col_comm_icon, col_comm_text = st.columns([1, 4])
 with col_comm_icon:
     st.markdown(f"<div style='text-align: center;'><span style='font-size: 35px;'>🌳</span></div>", unsafe_allow_html=True)
+
 with col_comm_text:
-    st.markdown(f"Kommerziell entsprächen dieselben Flüge nur **{format_de(current_emissions_comm, 2)} Tonnen CO₂**.")
-    st.success(f"**Vergleich:** Mit dem CO₂-Ausstoß eines einzigen Privatflugs könnte er dieselbe Strecke 10 Mal in der Business Class zurücklegen.")
+    st.markdown(f"Bei **{flights_to_analyze_comm} Flügen** kommerziell entstehen nur **{format_de(current_emissions_comm, 2)} Tonnen CO₂**.")
+    st.markdown(f"Dies würde nur **{format_de(current_trees_comm, 0)} Bäume** erfordern.")
+    st.success(f"**Vergleich:** Mit dem CO₂-Ausstoß eines einzigen Privatflugs könnte Tom Cruise dieselbe Strecke etwa **{times_business_val} Mal** in der Business Class eines Linienfluges zurücklegen.")
 
 st.markdown("---")
 
-# --- 6. Statistiken ---
+
+# --- 6. Detaillierte Statistiken ---
 st.header("📈 Detaillierte Statistiken")
 col_chart1, col_chart2 = st.columns(2)
+
 with col_chart1:
+    st.subheader("Emissionen pro Monat")
+    original_sum = data['Emissionen (Metrische Tonnen)'].sum()
+    scaling_factor = total_emissions / original_sum if original_sum != 0 else 1
     data['Monat_Str'] = data['Datum'].dt.strftime('%Y-%m')
-    m_stats = data.groupby('Monat_Str')['Emissionen (Metrische Tonnen)'].sum().reset_index()
-    m_stats['Emissionen (Metrische Tonnen)'] *= (total_emissions / data['Emissionen (Metrische Tonnen)'].sum())
-    st.plotly_chart(px.bar(m_stats, x='Monat_Str', y='Emissionen (Metrische Tonnen)', color_continuous_scale='Reds', color='Emissionen (Metrische Tonnen)'), use_container_width=True)
+    monthly_stats = data.groupby('Monat_Str')['Emissionen (Metrische Tonnen)'].sum().reset_index()
+    monthly_stats['Emissionen (Metrische Tonnen)'] *= scaling_factor
+    fig_month = px.bar(monthly_stats, x='Monat_Str', y='Emissionen (Metrische Tonnen)', color_continuous_scale='Reds', color='Emissionen (Metrische Tonnen)')
+    st.plotly_chart(fig_month, use_container_width=True)
+
 with col_chart2:
+    st.subheader("Top 5 Zielorte")
     top_dest = data['Zielort'].value_counts().head(5).reset_index()
     top_dest.columns = ['Ort', 'Anzahl']
-    st.plotly_chart(px.bar(top_dest, x='Anzahl', y='Ort', orientation='h', color_continuous_scale='Blues', color='Anzahl'), use_container_width=True)
+    fig_top5 = px.bar(top_dest, x='Anzahl', y='Ort', orientation='h', color_continuous_scale='Blues', color='Anzahl')
+    st.plotly_chart(fig_top5, use_container_width=True)

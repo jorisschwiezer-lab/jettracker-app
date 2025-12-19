@@ -154,12 +154,36 @@ c4.metric("Ø CO₂ pro Flug", format_de(avg_emissions, 1))
 st.markdown("---")
 
 
-# --- 4. Interaktive 3D Satelliten-Karte (FINALE VERSION: Gekrümmt, Farbig, Icons) ---
+# --- 4. Interaktive 3D Satelliten-Karte ---
 st.header("📍 3D Satelliten-Flugrouten")
+
+# --- ZEITHORIZONT AUSWAHL (Hinzugefügt) ---
+st.subheader("Time horizon")
+time_options = {
+    "1 Monat (Jan)": "2024-01-31",
+    "3 Monate (Jan-Mär)": "2024-03-31",
+    "6 Monate (Jan-Jun)": "2024-06-30",
+    "9 Monate (Jan-Sep)": "2024-09-30",
+    "1 Jahr (Gesamt)": "2024-12-31"
+}
+
+selected_label = st.radio(
+    label="Zeithorizont auswählen:",
+    options=list(time_options.keys()),
+    index=4, 
+    horizontal=True,
+    label_visibility="collapsed"
+)
+
+# Daten filtern basierend auf Auswahl (Immer ab 01.01.2024 bis zum Ende des Zeitraums)
+end_date_filter = pd.to_datetime(time_options[selected_label])
+filtered_map_data = map_data[(map_data['Datum'] >= "2024-01-01") & (map_data['Datum'] <= end_date_filter)]
+
+st.markdown(f"Anzeigte Flüge im Zeitraum **{selected_label}**: **{len(filtered_map_data)}**")
 st.markdown("Farbkodierung: **Grün** (selten) ➡ **Rot** (häufig). Flugzeug-Icon in der Mitte der Route zeigt die Richtung an.")
 
-# 1. Daten gruppieren
-route_counts = map_data.groupby(['Abflugort', 'Zielort', 'lat', 'lon', 'Ziel_lat', 'Ziel_lon']).size().reset_index(name='Anzahl_Fluege')
+# 1. Daten gruppieren für Karte
+route_counts = filtered_map_data.groupby(['Abflugort', 'Zielort', 'lat', 'lon', 'Ziel_lat', 'Ziel_lon']).size().reset_index(name='Anzahl_Fluege')
 
 # Maximalwert für die Farberechnung finden
 max_flights = route_counts['Anzahl_Fluege'].max()
@@ -255,9 +279,9 @@ for index, row in route_counts.iterrows():
     ))
 
 # 3. Flughäfen als Punkte hinzufügen (Dunkelblau)
-all_lons = list(map_data['lon']) + list(map_data['Ziel_lon'])
-all_lats = list(map_data['lat']) + list(map_data['Ziel_lat'])
-all_texts = list(map_data['Abflugort']) + list(map_data['Zielort'])
+all_lons = list(filtered_map_data['lon']) + list(filtered_map_data['Ziel_lon'])
+all_lats = list(filtered_map_data['lat']) + list(filtered_map_data['Ziel_lat'])
+all_texts = list(filtered_map_data['Abflugort']) + list(filtered_map_data['Zielort'])
 
 fig.add_trace(go.Scattermapbox(
     mode="markers",

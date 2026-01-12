@@ -129,11 +129,11 @@ with col_img2:
     st.image("Bild 2.jpeg", caption="Flugzeugtyp: Bombardier Challenger 350")
     # Aircraft Information unter dem Bild
     st.markdown("""
-    **Aircraft Information**
-    * **Registration:** N350XX
-    * **Type Code:** CL35
-    * **Type:** Challenger 350
-    * **Owner:** Tom Cruise / SATA LLC
+    **Informationen zum Flugzeug**
+    * **Registrierung:** N350XX
+    * **Typ Code:** CL35
+    * **Typ:** Challenger 350
+    * **Besitzer:** Tom Cruise / SATA LLC
     """)
 
 st.markdown("---")
@@ -167,7 +167,7 @@ st.markdown("---")
 st.header("3D Satelliten-Flugrouten")
 
 # Auswahlfunktion für den Zeithorizont
-st.subheader("Time horizon")
+st.subheader("Zeithorizont")
 time_options = {
     "1 Monat (Jan)": "2024-01-31",
     "3 Monate (Jan-Mär)": "2024-03-31",
@@ -299,7 +299,7 @@ st.markdown("---")
 
 
 # --- 5. CO2-Kompensation (Interaktiver Baumvergleich) ---
-st.header("🌳 CO₂-Kompensation (Privatjet)") 
+st.header("CO₂-Kompensation (Privatjet)") 
 
 flights_to_analyze = st.slider(
     'Anzahl der Flüge, die simuliert werden sollen:',
@@ -352,11 +352,11 @@ st.markdown("---")
 
 
 # --- 6. Detaillierte Statistiken (ANGESPASST AN BILDVORLAGE) ---
-st.header("Detaillierte Statistiken")
+st.header(" Weitere Statistiken")
 col_chart1, col_chart2 = st.columns(2)
 
 with col_chart1:
-    st.subheader("Distance per Month (Meilen)")
+    st.subheader("Distanz pro Monat (Meilen)")
     data['Monat_Str'] = data['Datum'].dt.strftime('%Y-%m')
     # Aggregieren der Distanz pro Monat
     dist_monthly = data.groupby('Monat_Str')['Distanz (Meilen)'].sum().reset_index()
@@ -372,8 +372,8 @@ with col_chart1:
     fig_dist.update_layout(
         plot_bgcolor='rgba(0,0,0,0)',
         paper_bgcolor='rgba(0,0,0,0)',
-        xaxis_title="Month",
-        yaxis_title="Total Distance (Miles)",
+        xaxis_title="Monat",
+        yaxis_title="Gesamtdistanz(Miles)",
         coloraxis_showscale=False
     )
     st.plotly_chart(fig_dist, use_container_width=True)

@@ -283,7 +283,7 @@ st.caption("Hinweis: Nutze die rechte Maustaste (oder Strg + Klick), um die 3D-A
 st.markdown("---")
 
 # --- NEUE LEGENDE NACH BILDVORLAGE ---
-st.markdown("### Route Density")
+st.markdown("### Streckendichte")
 col_l1, col_l2, col_l3 = st.columns(3)
 with col_l1:
     st.markdown("<div style='background-color: #00ff00; height: 10px; width: 100%; border-radius: 5px;'></div>", unsafe_allow_html=True)
@@ -373,7 +373,7 @@ with col_chart1:
         plot_bgcolor='rgba(0,0,0,0)',
         paper_bgcolor='rgba(0,0,0,0)',
         xaxis_title="Monat",
-        yaxis_title="Gesamtdistanz(Miles)",
+        yaxis_title="Gesamtdistanz (Meilen)",
         coloraxis_showscale=False
     )
     st.plotly_chart(fig_dist, use_container_width=True)

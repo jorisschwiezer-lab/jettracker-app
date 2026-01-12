@@ -140,7 +140,7 @@ st.markdown("---")
 
 
 # --- 3. Statistische Kennzahlen (KPIs) ---
-st.header("📊 Statistische Kennzahlen")
+st.header("Statistische Kennzahlen")
 
 total_distance = data['Distanz (Meilen)'].sum()
 total_fuel = data['Treibstoffverbrauch (Gallons)'].sum()
@@ -164,7 +164,7 @@ st.markdown("---")
 
 
 # --- 4. Interaktive 3D Satelliten-Karte ---
-st.header("📍 3D Satelliten-Flugrouten")
+st.header("3D Satelliten-Flugrouten")
 
 # Auswahlfunktion für den Zeithorizont
 st.subheader("Time horizon")
@@ -187,7 +187,7 @@ selected_label = st.radio(
 end_date_filter = pd.to_datetime(time_options[selected_label])
 filtered_map_data = map_data[(map_data['Datum'] >= "2024-01-01") & (map_data['Datum'] <= end_date_filter)]
 
-st.markdown(f"Anzeigte Flüge im Zeitraum **{selected_label}**: **{len(filtered_map_data)}**")
+st.markdown(f"Angezeigte Flüge im Zeitraum **{selected_label}**: **{len(filtered_map_data)}**")
 
 route_counts = filtered_map_data.groupby(['Abflugort', 'Zielort', 'lat', 'lon', 'Ziel_lat', 'Ziel_lon']).size().reset_index(name='Anzahl_Fluege')
 max_flights = route_counts['Anzahl_Fluege'].max()
@@ -322,7 +322,7 @@ st.markdown("---")
 
 
 # --- 5.5 KOMMERZIELLER VERGLEICH & BUSINESS-METRIK ---
-st.header("✈️ Vergleich: Kommerzieller Flug")
+st.header("Vergleich: Kommerzieller Flug")
 COMMERCIAL_FACTOR = 0.10 
 
 flights_to_analyze_comm = st.slider(
@@ -352,7 +352,7 @@ st.markdown("---")
 
 
 # --- 6. Detaillierte Statistiken (ANGESPASST AN BILDVORLAGE) ---
-st.header("📈 Detaillierte Statistiken")
+st.header("Detaillierte Statistiken")
 col_chart1, col_chart2 = st.columns(2)
 
 with col_chart1:

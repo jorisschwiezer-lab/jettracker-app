@@ -332,17 +332,20 @@ flights_to_analyze_comm = st.slider(
 
 current_emissions_comm = flights_to_analyze_comm * (avg_emissions * COMMERCIAL_FACTOR)
 current_trees_comm = current_emissions_comm / CO2_PER_TREE_TONS_ANNUALLY
+
+# KORREKTUR: Dynamische Schriftgröße für den kommerziellen Baum
+font_size_px_comm = int(35 + (110 - 35) * (flights_to_analyze_comm / total_flights))
+
 # Multiplikator: Wie oft Business statt Privat
 times_business_val = int(1 / COMMERCIAL_FACTOR)
 
 col_comm_icon, col_comm_text = st.columns([1, 4])
 with col_comm_icon:
-    st.markdown(f"<div style='text-align: center;'><span style='font-size: 35px;'>🌳</span></div>", unsafe_allow_html=True)
+    st.markdown(f"<div style='text-align: center;'><span style='font-size: {font_size_px_comm}px;'>🌳</span></div>", unsafe_allow_html=True)
 
 with col_comm_text:
     st.markdown(f"Bei **{flights_to_analyze_comm} Flügen** kommerziell entstehen nur **{format_de(current_emissions_comm, 2)} Tonnen CO₂**.")
     st.markdown(f"Dies würde nur **{format_de(current_trees_comm, 0)} Bäume** erfordern.")
-    # --- NEU: Business Class Vergleich ---
     st.success(f"**Vergleich:** Mit dem CO₂-Ausstoß eines einzigen Privatflugs könnte Tom Cruise dieselbe Strecke etwa **{times_business_val} Mal** in der Business Class eines Linienfluges zurücklegen.")
 
 st.markdown("---")
